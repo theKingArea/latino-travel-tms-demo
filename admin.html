@@ -1,0 +1,2063 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>Latino Travel - Panel Administrativo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #f1f5f9; font-family: system-ui, -apple-system, sans-serif; }
+    .fc-day-today { background: #eff6ff !important; }
+    .fc-event { cursor: pointer; transition: transform 0.1s; }
+    .fc-event:active { transform: scale(0.98); }
+    .estado-completado { background-color: #22c55e !important; border-color: #16a34a !important; }
+    .estado-iniciado { background-color: #eab308 !important; border-color: #ca8a04 !important; }
+    .estado-pendiente { background-color: #ef4444 !important; border-color: #dc2626 !important; }
+    .estado-sin-asignar { background-color: #9ca3af !important; border-color: #6b7280 !important; }
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+      z-index: 1000; display: flex; align-items: center; justify-content: center;
+    }
+    .modal-box {
+      background: #fff; border-radius: 20px;
+      width: 90%; max-width: 500px; max-height: 85vh;
+      overflow-y: auto; padding: 24px; animation: fadeIn .22s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    .stats-card { transition: transform 0.1s; }
+    .stats-card:active { transform: scale(0.98); }
+    .badge-live { display:inline-flex; align-items:center; gap:5px; background:#dcfce7; color:#166534; font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; }
+    .badge-live .dot { width:6px; height:6px; border-radius:50%; background:#22c55e; animation: pulse-dot 1.6s infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+    /* ═══════════ Reportes de Pagos ═══════════ */
+    #rp-panel { font-family: inherit; }
+    #rp-panel .rp-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 14px; }
+    #rp-panel .rp-field { display: flex; flex-direction: column; gap: 4px; }
+    #rp-panel .rp-field label { font-size: 12px; color: #555; }
+    #rp-panel input, #rp-panel select, #rp-panel button { padding: 6px 8px; font-size: 14px; }
+    #rp-panel button { cursor: pointer; border-radius: 6px; border: 1px solid #ccc; background: #f5f5f5; }
+    #rp-panel button.rp-primary { background: #6a3fd1; color: #fff; border-color: #6a3fd1; }
+    #rp-panel table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 10px; }
+    #rp-panel th, #rp-panel td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+    #rp-panel th { background: #f0eefa; }
+    #rp-panel .rp-pagado { color: #1a8a3c; font-weight: 600; }
+    #rp-panel .rp-pendiente { color: #b8860b; font-weight: 600; }
+    #rp-panel .rp-totales { margin-top: 16px; display: flex; gap: 24px; flex-wrap: wrap; }
+    #rp-panel .rp-totales table { width: auto; min-width: 260px; }
+    #rp-panel .rp-tarifas-lista { max-height: 320px; overflow-y: auto; border: 1px solid #eee; padding: 6px; margin-top: 8px; }
+    #rp-panel .rp-tarifa-item { display: flex; gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px dashed #eee; font-size: 12px; }
+    #rp-panel .rp-msg { font-size: 13px; margin-top: 6px; }
+    #rp-panel .rp-msg.error { color: #c0392b; }
+    #rp-panel .rp-msg.ok { color: #1a8a3c; }
+  </style>
+</head>
+<body>
+<div class="max-w-[1700px] mx-auto px-4 py-4 md:py-6">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl md:text-3xl font-bold text-blue-700 flex items-center gap-2">
+        <i class="fa-solid fa-van-shuttle"></i> Latino Travel
+        <span class="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded-full">Panel Admin</span>
+        <span class="badge-live" id="badgeLive"><span class="dot"></span>Auto-actualiza</span>
+      </h1>
+      <p class="text-gray-500 text-sm mt-1">Gestión completa de traslados y conductores</p>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="abrirModalPapelera()" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold flex items-center gap-2">
+        <i class="fa-solid fa-trash-can"></i> Papelera
+      </button>
+      <button onclick="cargarDatos()" class="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold flex items-center gap-2">
+        <i class="fa-solid fa-rotate-right"></i> Actualizar
+      </button>
+    </div>
+  </div>
+  <!-- La contraseña de admin.html ya NO se valida aquí con JavaScript.
+       El acceso a esta carpeta está protegido a nivel de servidor con
+       HTTP Basic Auth (cPanel > Proteger directorio con contraseña).
+       Ver instrucciones al final de la conversación. -->
+  <script>
+    // Clave compartida con config.php (ADMIN_API_KEY) — necesaria para
+    // la acción CAMBIAR_CONDUCTOR y para el módulo de Reportes de Pagos.
+    const ADMIN_API_KEY = "REEMPLAZA_CON_TU_ADMIN_API_KEY";
+  </script>
+  <!-- Lista de tours para la pestaña Disponibilidad y para calendario-tours.html
+       (calendario público). Vive en api.tudominio.com, AFUERA de Panel_admin/
+       (junto a api.php y disponibilidad-api.php — el mismo lugar donde ya
+       subiste disponibilidad-api.php y funcionó), para que exista UN solo
+       archivo real y no dos copias que se puedan desincronizar. Para
+       agregar o corregir un tour, edita SOLO ese archivo. -->
+  <script src="https://api.tudominio.com/tours-config.js"></script>
+  <div class="flex flex-col lg:flex-row gap-4 items-start">
+    <!-- ═══════════════════ SIDEBAR IZQUIERDA: pestañas + filtros ═══════════════════ -->
+    <aside class="w-full lg:w-72 flex-shrink-0 space-y-4 lg:sticky lg:top-4">
+      <div class="bg-white rounded-xl shadow-sm p-3">
+        <p class="text-xs font-semibold text-gray-400 uppercase mb-2 px-1">Vista</p>
+        <div class="grid grid-cols-2 lg:grid-cols-1 gap-2">
+          <button onclick="cambiarVista('calendario')" id="btnVistaCalendario" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold flex items-center gap-2">
+            <i class="fa-solid fa-calendar"></i> Calendario
+          </button>
+          <button onclick="cambiarVista('lista')" id="btnVistaLista" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold flex items-center gap-2">
+            <i class="fa-solid fa-list"></i> Lista
+          </button>
+          <button onclick="cambiarVista('reportes')" id="btnVistaReportes" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold flex items-center gap-2">
+            <i class="fa-solid fa-file-invoice-dollar"></i> Reportes
+          </button>
+          <button onclick="cambiarVista('conductores')" id="btnVistaConductores" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold flex items-center gap-2">
+            <i class="fa-solid fa-id-card"></i> Conductores
+          </button>
+          <button onclick="cambiarVista('formularios')" id="btnVistaFormularios" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold flex items-center gap-2">
+            <i class="fa-solid fa-file-pen"></i> Formularios
+          </button>
+          <button onclick="cambiarVista('disponibilidad')" id="btnVistaDisponibilidad" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold flex items-center gap-2">
+            <i class="fa-solid fa-calendar-check"></i> Disponibilidad
+          </button>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-4" id="panelFiltros">
+        <p class="text-xs font-semibold text-gray-400 uppercase mb-3 px-1">Filtros</p>
+        <div class="space-y-3">
+          <!-- BUSCADOR (2026-09-11, a pedido de Enrique) — por nombre de
+               pasajero o N° de reserva. El N° de reserva de las OTAs queda
+               guardado dentro del campo "notas" (ej. "N° RESERVA: 10581116"),
+               no en una columna propia — por eso la búsqueda mira ahí además
+               del nombre. Filtra en el navegador sobre todosLosViajes (ya
+               está todo cargado en memoria para pintar el calendario), no
+               hace falta tocar api.php. Ver aplicarFiltros() más abajo. -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Buscar</label>
+            <div class="relative">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+              <input type="text" id="filtroBusqueda" placeholder="Nombre del pasajero o N° de reserva" class="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm">
+            </div>
+            <p class="text-[11px] text-gray-400 mt-1 min-h-[14px]" id="filtroBusquedaContador"></p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Conductor</label>
+            <select id="filtroConductor" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">Todos los conductores</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Vendedor</label>
+            <select id="filtroVendedor" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">Todos los vendedores</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Estado</label>
+            <select id="filtroEstado" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">Todos</option>
+              <option value="COMPLETADO">✅ COMPLETADO</option>
+              <option value="INICIADO">🟡 INICIADO</option>
+              <option value="PENDIENTE">🔴 PENDIENTE</option>
+              <option value="SIN ASIGNAR">⚪ SIN ASIGNAR</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha desde</label>
+            <input type="date" id="filtroFechaDesde" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha hasta</label>
+            <input type="date" id="filtroFechaHasta" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          </div>
+        </div>
+        <div class="flex justify-between mt-4 gap-2">
+          <button onclick="limpiarFiltros()" class="px-3 py-1 text-sm text-gray-600 hover:text-gray-800">Limpiar filtros</button>
+          <button onclick="aplicarFiltros(true)" class="px-4 py-1 bg-blue-600 text-white rounded-lg text-sm font-semibold">Aplicar</button>
+        </div>
+      </div>
+    </aside>
+    <!-- ═══════════════════ CONTENIDO PRINCIPAL ═══════════════════ -->
+    <main class="flex-1 w-full min-w-0 space-y-4">
+      <div id="panelResumenGeneral" class="space-y-4">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3" id="statsContainer"></div>
+        <div class="bg-white rounded-xl shadow-sm p-4">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4">
+            <h2 class="font-bold text-lg flex items-center gap-2">
+              <i class="fa-solid fa-folder-open text-blue-600"></i> Documentos de viajes
+              <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Fotos evidencia y facturas</span>
+            </h2>
+            <div class="flex gap-2">
+              <button onclick="abrirModalDocumentos()" class="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2">
+                <i class="fa-solid fa-images"></i> Ver documentos
+              </button>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="resumenDocumentos"></div>
+        </div>
+      </div>
+      <div id="vistaCalendario" class="bg-white rounded-xl shadow-sm p-4">
+        <div id="calendar"></div>
+      </div>
+      <div id="vistaLista" class="bg-white rounded-xl shadow-sm overflow-hidden hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b">
+              <tr><th class="px-4 py-3 text-left">Fecha</th><th class="px-4 py-3 text-left">Hora</th><th class="px-4 py-3 text-left">Trayecto</th><th class="px-4 py-3 text-left">Pasajeros</th><th class="px-4 py-3 text-left">Conductor</th><th class="px-4 py-3 text-left">Vendedor</th><th class="px-4 py-3 text-left">Estado</th><th class="px-4 py-3 text-center">Acciones</th></tr>
+            </thead>
+            <tbody id="tablaViajes"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="vistaReportes" class="bg-white rounded-xl shadow-sm p-4 hidden">
+        <section id="rp-panel">
+          <h2>Reportes de Trayectos y Pagos a Conductores</h2>
+          <div class="rp-row">
+            <div class="rp-field">
+              <label>Desde</label>
+              <input type="date" id="rp-desde">
+            </div>
+            <div class="rp-field">
+              <label>Hasta</label>
+              <input type="date" id="rp-hasta">
+            </div>
+            <div class="rp-field">
+              <label>Conductor (opcional)</label>
+              <input type="text" id="rp-conductor" placeholder="Nombre exacto">
+            </div>
+            <div class="rp-field">
+              <label>Trayecto</label>
+              <input type="text" id="rp-trayecto" placeholder="Ej: Tocumen, Gamboa, Tour Canal...">
+            </div>
+            <div class="rp-field">
+              <label>Estado de pago</label>
+              <select id="rp-estado-pago">
+                <option value="">Todos</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="pagado">Pagado</option>
+              </select>
+            </div>
+            <button class="rp-primary" onclick="rpCargarReporte()">Buscar</button>
+            <button onclick="rpExportarXlsx()">Exportar XLSX</button>
+          </div>
+          <div class="rp-row">
+            <button onclick="rpMarcarSeleccionados('marcar_pagado')">Marcar seleccionados como pagados</button>
+            <button onclick="rpMarcarSeleccionados('desmarcar_pagado')">Desmarcar seleccionados</button>
+          </div>
+          <div class="rp-row">
+            <button onclick="rpMarcarSeleccionados('marcar_pagado_guia')">Marcar guía seleccionados como pagado</button>
+            <button onclick="rpMarcarSeleccionados('desmarcar_pagado_guia')">Desmarcar guía seleccionados</button>
+          </div>
+          <div id="rp-msg" class="rp-msg"></div>
+          <table id="rp-tabla">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="rp-check-all" onclick="rpToggleAll(this)"></th>
+                <th>Fecha</th>
+                <th>Conductor</th>
+                <th>Tipo</th>
+                <th>Trayecto</th>
+                <th>Pasajero</th>
+                <th>Pax</th>
+                <th>Tarifa / Monto</th>
+                <th>Adicional</th>
+                <th>Guía/Asistencia</th>
+                <th>Pago Guía</th>
+                <th>Estado Pago</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="rp-tbody"></tbody>
+          </table>
+          <div class="rp-totales">
+            <div>
+              <strong>Total general: <span id="rp-total-general">$0.00</span></strong>
+            </div>
+            <div>
+              <table id="rp-tabla-totales-conductor">
+                <thead><tr><th>Conductor</th><th>Viajes</th><th>Total</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div>
+              <table id="rp-tabla-totales-guia">
+                <thead><tr><th>Guía/Asistencia</th><th>Viajes</th><th>Total</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <hr style="margin: 24px 0;">
+          <h3>Tarifas configuradas</h3>
+          <div class="rp-row">
+            <select id="rp-tarifa-filtro-tipo" onchange="rpCargarTarifas()">
+              <option value="">Todas</option>
+              <option value="interno">Interno</option>
+              <option value="externo">Externo</option>
+            </select>
+            <button onclick="rpMostrarFormTarifa()">+ Nueva tarifa</button>
+          </div>
+          <div id="rp-tarifas-lista" class="rp-tarifas-lista"></div>
+          <div id="rp-form-tarifa" style="display:none; margin-top:12px; border:1px solid #ddd; padding:10px; border-radius:6px;">
+            <input type="hidden" id="rp-tf-id">
+            <div class="rp-row">
+              <div class="rp-field">
+                <label>Tipo conductor</label>
+                <select id="rp-tf-tipo-conductor">
+                  <option value="interno">Interno</option>
+                  <option value="externo">Externo</option>
+                </select>
+              </div>
+              <div class="rp-field">
+                <label>Vehículo (solo interno)</label>
+                <select id="rp-tf-tipo-vehiculo">
+                  <option value="">N/A</option>
+                  <option value="sedan_van">Sedán/Van</option>
+                  <option value="hiace_bus">Hiace/Bus</option>
+                </select>
+              </div>
+              <div class="rp-field">
+                <label>Grupo</label>
+                <input type="text" id="rp-tf-grupo" placeholder="Ej: Tours Guiados">
+              </div>
+              <div class="rp-field">
+                <label>Descripción</label>
+                <input type="text" id="rp-tf-descripcion" placeholder="Ej: Gamboa">
+              </div>
+              <div class="rp-field">
+                <label>Precio una vía</label>
+                <input type="number" step="0.01" id="rp-tf-una-via">
+              </div>
+              <div class="rp-field">
+                <label>Precio ida y vuelta</label>
+                <input type="number" step="0.01" id="rp-tf-ida-vuelta">
+              </div>
+              <div class="rp-field">
+                <label>Precio adicional (pax extra)</label>
+                <input type="number" step="0.01" id="rp-tf-adicional">
+              </div>
+              <button class="rp-primary" onclick="rpGuardarTarifa()">Guardar</button>
+              <button onclick="document.getElementById('rp-form-tarifa').style.display='none'">Cancelar</button>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div id="vistaConductores" class="bg-white rounded-xl shadow-sm p-4 hidden">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4">
+          <h2 class="font-bold text-lg flex items-center gap-2">
+            <i class="fa-solid fa-id-card text-blue-600"></i> Conductores
+            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full" id="totalConductoresBadge"></span>
+          </h2>
+          <div class="flex gap-2">
+            <button onclick="enviarCredencialesATodos()" class="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2">
+              <i class="fa-solid fa-paper-plane"></i> Enviar credenciales a todos
+            </button>
+            <button onclick="abrirModalNuevoConductor()" class="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2">
+              <i class="fa-solid fa-plus"></i> Agregar conductor
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b">
+              <tr>
+                <th class="px-4 py-3 text-left">Nombre</th>
+                <th class="px-4 py-3 text-left">PIN</th>
+                <th class="px-4 py-3 text-left">Email</th>
+                <th class="px-4 py-3 text-left">Tipo</th>
+                <th class="px-4 py-3 text-left">Vehículo</th>
+                <th class="px-4 py-3 text-left">Estado</th>
+                <th class="px-4 py-3 text-left">Viajes asignados</th>
+                <th class="px-4 py-3 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tablaConductores"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="vistaFormularios" class="bg-white rounded-xl shadow-sm p-4 hidden">
+        <div class="flex flex-wrap gap-2 mb-4 pb-3 border-b" id="tabsFormularios">
+          <!-- las pestañas se generan por JS a partir de FORMULARIOS -->
+        </div>
+        <div class="w-full rounded-lg overflow-hidden border border-gray-200">
+          <iframe id="iframeFormulario" src="" style="width:100%;height:80vh;border:none;display:block;" loading="lazy" title="Formulario"></iframe>
+        </div>
+      </div>
+      <!-- ═══════════════════════════════════════════════════════════
+           DISPONIBILIDAD DE TOURS (2026-09) — calendario manual: tocas un
+           día, se abre la lista de tours con un switch cada uno, y cada
+           toque guarda solo. Esto NO lee datos de viajes reales (por eso
+           falló el intento automático anterior); es una tabla aparte que
+           solo tú llenas, guardada en disponibilidad-api.php. El calendario
+           público (calendario-tours.html) lee esos mismos datos para
+           mostrarle a los visitantes qué tours pueden reservar cada día,
+           con link directo al producto.
+           Vista: calendario del mes (solo número + contador de tours
+           activos ese día, pensado para que quepan las 7 columnas en un
+           celular) + abajo un panel del día seleccionado con un switch por
+           tour. Cada switch guarda al toque, no hay botón "Guardar" aparte.
+           ═══════════════════════════════════════════════════════════ -->
+      <div id="vistaDisponibilidad" class="bg-white rounded-xl shadow-sm p-4 hidden">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4">
+          <h2 class="font-bold text-lg flex items-center gap-2">
+            <i class="fa-solid fa-calendar-check text-blue-600"></i> Disponibilidad de tours
+            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Toca un día y activa sus tours</span>
+          </h2>
+          <a href="https://api.tudominio.com/calendario-tours.html" target="_blank" class="text-sm text-blue-600 underline flex items-center gap-1">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> Ver calendario público
+          </a>
+        </div>
+        <div id="dispoMsg" class="text-sm mb-2 text-center h-5"></div>
+        <!-- lg+: calendario y panel del día lado a lado (así no hay que
+             bajar y subir para pasar de uno al otro). Debajo de lg: el
+             panel se apila abajo del calendario, como antes. -->
+        <div class="flex flex-col lg:flex-row gap-4 lg:items-start">
+          <div class="w-full lg:w-[300px] lg:flex-shrink-0">
+            <div class="flex items-center justify-center gap-4 mb-3">
+              <button onclick="dispoCambiarMes(-1)" class="w-9 h-9 flex items-center justify-center bg-gray-200 rounded-full"><i class="fa-solid fa-chevron-left"></i></button>
+              <p class="font-semibold text-base sm:text-lg min-w-[150px] sm:min-w-[180px] text-center" id="dispoMesLabel">—</p>
+              <button onclick="dispoCambiarMes(1)" class="w-9 h-9 flex items-center justify-center bg-gray-200 rounded-full"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+            <div class="grid grid-cols-7 gap-1" id="dispoCalGrid"></div>
+          </div>
+          <div id="dispoPanelDia" class="w-full lg:flex-1 mt-4 lg:mt-0 pt-4 lg:pt-0 border-t lg:border-t-0 lg:border-l lg:pl-5"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div id="modalDocumentosOverlay" class="modal-overlay" style="display:none;" onclick="cerrarModalDocumentosSiOverlay(event)">
+    <div class="modal-box" style="max-width: 800px;" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-bold"><i class="fa-solid fa-images text-blue-600"></i> Documentos de viajes</h3>
+        <button onclick="cerrarModalDocumentos()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+      </div>
+      <div class="flex flex-wrap gap-2 mb-4 pb-3 border-b">
+        <button onclick="filtrarDocumentos('todas')" id="docFiltroTodas" class="px-3 py-1 rounded-full text-sm bg-blue-600 text-white">Todas</button>
+        <button onclick="filtrarDocumentos('factura')" id="docFiltroFactura" class="px-3 py-1 rounded-full text-sm bg-gray-200">🧾 Facturas</button>
+        <button onclick="filtrarDocumentos('despacho')" id="docFiltroDespacho" class="px-3 py-1 rounded-full text-sm bg-gray-200">🚐 Fotos despacho</button>
+        <button onclick="filtrarDocumentos('sin')" id="docFiltroSin" class="px-3 py-1 rounded-full text-sm bg-gray-200">📄 Sin documentos</button>
+      </div>
+      <div id="listaDocumentos" class="space-y-3 max-h-[60vh] overflow-y-auto"></div>
+    </div>
+  </div>
+  <div id="modalPapeleraOverlay" class="modal-overlay" style="display:none;" onclick="cerrarModalPapeleraSiOverlay(event)">
+    <div class="modal-box" style="max-width: 800px;" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-bold"><i class="fa-solid fa-trash-can text-gray-600"></i> Papelera</h3>
+        <button onclick="cerrarModalPapelera()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+      </div>
+      <p class="text-xs text-gray-500 mb-3">Viajes eliminados desde el panel. Se pueden restaurar en cualquier momento.</p>
+      <div id="listaPapelera" class="space-y-3 max-h-[60vh] overflow-y-auto"></div>
+    </div>
+  </div>
+  <div id="modalConductorOverlay" class="modal-overlay" style="display:none;" onclick="cerrarModalConductorSiOverlay(event)">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-start mb-4">
+        <h3 class="text-xl font-bold">Agregar conductor</h3>
+        <button onclick="cerrarModalConductor()" class="text-gray-400 text-2xl">&times;</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nombre</label>
+          <input type="text" id="nuevoConductorNombre" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" placeholder="Ej: JUAN PEREZ">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">PIN para su app (opcional)</label>
+          <input type="text" id="nuevoConductorPin" maxlength="6" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" placeholder="Se genera uno de 4 dígitos si lo dejás vacío">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Email (opcional)</label>
+          <input type="email" id="nuevoConductorEmail" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" placeholder="Para poder mandarle el link de la app + su PIN">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Tipo</label>
+          <select id="nuevoConductorTipo" onchange="onCambioTipoConductor()" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+            <option value="externo">Externo (transportista)</option>
+            <option value="interno">Interno (flota propia)</option>
+          </select>
+        </div>
+        <div id="campoVehiculoConductor" class="hidden">
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Vehículo</label>
+          <select id="nuevoConductorVehiculo" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+            <option value="sedan_van">Sedán / Van</option>
+            <option value="hiace_bus">Hiace / Bus</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-5">
+        <button onclick="cerrarModalConductor()" class="flex-1 px-4 py-2 bg-gray-200 rounded-lg">Cancelar</button>
+        <button onclick="guardarNuevoConductor()" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">
+          <i class="fa-solid fa-floppy-disk"></i> Guardar
+        </button>
+      </div>
+    </div>
+  </div>
+  <div id="modalOverlay" class="modal-overlay" style="display:none;" onclick="cerrarModalSiOverlay(event)">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div id="modalContenido"></div>
+    </div>
+  </div>
+  <div id="rp-modalOverlay" class="modal-overlay" style="display:none;" onclick="rpCerrarModalAsignarSiOverlay(event)">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div id="rp-modalContenido"></div>
+    </div>
+  </div>
+  <div id="loader" style="position:fixed;inset:0;background:rgba(255,255,255,.85);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:2000;">
+    <div style="width:44px;height:44px;border:4px solid #2563eb;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;"></div>
+    <p class="text-gray-500 mt-2">Cargando datos...</p>
+  </div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+</div>
+<script>
+// ═══════════════════════════════════════════════════════════
+// FUENTE DE DATOS: api.php en tu servidor cPanel (MySQL).
+// Mismo endpoint que usa la app de conductores.
+// ═══════════════════════════════════════════════════════════
+const URL_API = "https://api.tudominio.com/api.php";
+// El servidor PHP no empuja datos en tiempo real (no hay listeners
+// push como Firestore), así que refrescamos en segundo plano cada 30s.
+const INTERVALO_AUTOACTUALIZAR_MS = 30000;
+let todosLosViajes = [];
+let conductoresLista = [];
+let conductoresMaestro = [];
+let conductoresDetalle = [];
+let vendedoresLista = [];
+let coloresVendedores = {};
+let vistaActual = "calendario";
+let calendarInstance = null;
+let filtroDocumentosActual = "todas";
+// ═══════════════════════════════════════════════════════════
+// FORMULARIOS (2026-08-28) — los 3 formularios de Tally embebidos
+// como pestañas de solo-visualización, igual que en el panel de solo
+// lectura. NO cambia nada del flujo de datos: el formulario embebido
+// sigue siendo el de Tally de siempre, las respuestas se siguen
+// mandando al mismo webhook (recibir-tally.php). Esto solo evita que
+// el equipo tenga que salir del panel a otra pestaña del navegador.
+// URL de embed = link normal de Tally (tally.so/r/XXXX) cambiando
+// "/r/" por "/embed/" — formato oficial documentado por Tally.
+// ═══════════════════════════════════════════════════════════
+const FORMULARIOS = [
+  { nombre: "Nueva solicitud de traslados", url: "https://tally.so/embed/QKve6A?alignLeft=1&hideTitle=1&transparentBackground=1" },
+  { nombre: "Solo Tour", url: "https://tally.so/embed/VLvrEN?alignLeft=1&hideTitle=1&transparentBackground=1" },
+  { nombre: "Traslado mixto", url: "https://tally.so/embed/vGJyNX?alignLeft=1&hideTitle=1&transparentBackground=1" }
+];
+let tabsFormulariosListos = false;
+function inicializarTabsFormularios() {
+  if (tabsFormulariosListos) return;
+  const cont = document.getElementById("tabsFormularios");
+  cont.innerHTML = FORMULARIOS.map((f, i) =>
+    `<button onclick="cambiarFormulario(${i})" id="tabForm${i}" class="px-4 py-2 rounded-lg text-sm font-semibold ${i === 0 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}">${f.nombre}</button>`
+  ).join("");
+  tabsFormulariosListos = true;
+  cambiarFormulario(0);
+}
+function cambiarFormulario(idx) {
+  FORMULARIOS.forEach((f, i) => {
+    const btn = document.getElementById("tabForm" + i);
+    if (btn) btn.className = "px-4 py-2 rounded-lg text-sm font-semibold " + (i === idx ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-700");
+  });
+  document.getElementById("iframeFormulario").src = FORMULARIOS[idx].url;
+}
+const paletaColores = [
+  { bg: "#8b5cf6", text: "white" },
+  { bg: "#ec4899", text: "white" },
+  { bg: "#06b6d4", text: "white" },
+  { bg: "#f59e0b", text: "white" },
+  { bg: "#10b981", text: "white" },
+  { bg: "#6366f1", text: "white" },
+  { bg: "#ef4444", text: "white" },
+  { bg: "#14b8a6", text: "white" },
+  { bg: "#a855f7", text: "white" },
+  { bg: "#f43f5e", text: "white" },
+];
+function asignarColoresVendedores(vendedores) {
+  coloresVendedores = {};
+  vendedores.forEach((vendedor, index) => {
+    const colorIndex = index % paletaColores.length;
+    coloresVendedores[vendedor] = paletaColores[colorIndex];
+  });
+}
+function getColorVendedor(vendedor) {
+  if (!vendedor || !coloresVendedores[vendedor]) {
+    return { bg: "#6b7280", text: "white" };
+  }
+  return coloresVendedores[vendedor];
+}
+function mostrarLoader(show) {
+  document.getElementById("loader").style.display = show ? "flex" : "none";
+}
+function marcarBadgeError(hayError) {
+  const badge = document.getElementById("badgeLive");
+  if (!badge) return;
+  if (hayError) {
+    badge.style.background = "#fee2e2";
+    badge.style.color = "#991b1b";
+    badge.innerHTML = '<span class="dot" style="background:#ef4444;"></span>Sin conexión';
+  } else {
+    badge.style.background = "#dcfce7";
+    badge.style.color = "#166534";
+    badge.innerHTML = '<span class="dot"></span>Auto-actualiza';
+  }
+}
+async function cargarDatosDesdeAPI(mostrarSpinner) {
+  if (mostrarSpinner) mostrarLoader(true);
+  try {
+    const res = await fetch(URL_API + "?clave=REEMPLAZA_CON_TU_CLAVE_DE_LECTURA&t=" + Date.now());
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const raw = await res.json();
+    if (raw.error) throw new Error(raw.error);
+    const traslados = raw.traslados || [];
+    conductoresMaestro = raw.conductores || [];
+    todosLosViajes = traslados.map(t => ({
+      idEvento: t.idEvento || "",
+      fecha: (t.fecha || "").toString().trim(),
+      hora: (t.hora || "").toString().trim(),
+      vuelo: (t.vuelo || "").toString().trim(),
+      trayecto: (t.trayecto || "").toString().trim(),
+      lugarRecogida: (t.lugarRecogida || "").toString().trim(),
+      pasajeroPrincipal: (t.pasajeroPrincipal || "").toString().trim(),
+      telefono: (t.telefono || "").toString().trim(),
+      pasajeros: t.pasajeros || t.pasajeroPrincipal || "SIN ESPECIFICAR",
+      cantidadPasajeros: parseInt(t.cantidadPasajeros) || 0,
+      conductor: (() => {
+        const c = (t.conductor || "SIN ASIGNAR").toString().trim().toUpperCase();
+        return (c === "" || c === "POR ASIGNAR") ? "SIN ASIGNAR" : c;
+      })(),
+      vendedor: (t.vendedor || "").toString().trim(),
+      estado: (t.estado || "PENDIENTE").toString().toUpperCase().trim(),
+      fotoDespachoUrl: (t.fotoDespachoUrl || "").toString().trim(),
+      facturaUrl: (t.facturaUrl || "").toString().trim(),
+      notas: (t.notas || "").toString(),
+      // Notas para conductor: campo nuevo (2026-08-08), interno del panel,
+      // se muestra de solo lectura en la app de conductores.
+      notasConductor: (t.notasConductor || "").toString(),
+      horaCompletado: (t.horaCompletado || "").toString().trim()
+    }));
+    marcarBadgeError(false);
+    procesarDatosCargados();
+  } catch (e) {
+    console.error("Error leyendo el API:", e);
+    marcarBadgeError(true);
+  } finally {
+    mostrarLoader(false);
+  }
+}
+function cargarDatos() {
+  cargarDatosDesdeAPI(true);
+}
+function procesarDatosCargados() {
+  conductoresLista = [...new Set(todosLosViajes.map(v => v.conductor).filter(c => c && c !== "SIN ASIGNAR"))];
+  conductoresLista.sort();
+  vendedoresLista = [...new Set(todosLosViajes.map(v => v.vendedor).filter(v => v && v !== ""))];
+  vendedoresLista.sort();
+  asignarColoresVendedores(vendedoresLista);
+  actualizarFiltrosConductores();
+  actualizarFiltrosVendedores();
+  calcularEstadisticas();
+  calcularResumenDocumentos();
+  aplicarFiltros();
+}
+function actualizarFiltrosConductores() {
+  const select = document.getElementById("filtroConductor");
+  const valorActual = select.value;
+  select.innerHTML = '<option value="">Todos los conductores</option>';
+  conductoresLista.forEach(c => { if(c) select.innerHTML += `<option value="${c}">${c}</option>`; });
+  select.innerHTML += '<option value="SIN ASIGNAR">⚪ SIN ASIGNAR</option>';
+  if (valorActual) select.value = valorActual;
+}
+function actualizarFiltrosVendedores() {
+  const select = document.getElementById("filtroVendedor");
+  const valorActual = select.value;
+  select.innerHTML = '<option value="">Todos los vendedores</option>';
+  vendedoresLista.forEach(v => { if(v) select.innerHTML += `<option value="${v}">${v}</option>`; });
+  if (valorActual) select.value = valorActual;
+}
+function calcularEstadisticas() {
+  const stats = {
+    total: todosLosViajes.length,
+    completados: todosLosViajes.filter(v => v.estado === "COMPLETADO").length,
+    iniciados: todosLosViajes.filter(v => v.estado === "INICIADO").length,
+    pendientes: todosLosViajes.filter(v => v.estado === "PENDIENTE").length,
+    sinAsignar: todosLosViajes.filter(v => v.conductor === "SIN ASIGNAR" || v.conductor === "").length
+  };
+  document.getElementById("statsContainer").innerHTML = `
+    <div class="bg-white rounded-xl p-3 text-center shadow-sm border-l-4 border-blue-500"><p class="text-2xl font-bold text-blue-600">${stats.total}</p><p class="text-xs text-gray-500">Total viajes</p></div>
+    <div class="bg-white rounded-xl p-3 text-center shadow-sm border-l-4 border-green-500"><p class="text-2xl font-bold text-green-600">${stats.completados}</p><p class="text-xs text-gray-500">Completados</p></div>
+    <div class="bg-white rounded-xl p-3 text-center shadow-sm border-l-4 border-yellow-500"><p class="text-2xl font-bold text-yellow-600">${stats.iniciados}</p><p class="text-xs text-gray-500">En curso</p></div>
+    <div class="bg-white rounded-xl p-3 text-center shadow-sm border-l-4 border-red-500"><p class="text-2xl font-bold text-red-600">${stats.pendientes}</p><p class="text-xs text-gray-500">Pendientes</p></div>
+    <div class="bg-white rounded-xl p-3 text-center shadow-sm border-l-4 border-gray-500"><p class="text-2xl font-bold text-gray-600">${stats.sinAsignar}</p><p class="text-xs text-gray-500">Sin asignar</p></div>
+  `;
+}
+// FIX 2026-09-11 (Enrique) — quita tildes/mayúsculas para que la búsqueda no
+// dependa de escribir el nombre exactamente igual a como quedó guardado
+// (ej. buscar "jose" tiene que encontrar "José").
+function normalizarBusqueda(s) {
+  return (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+function aplicarFiltros(moverCalendario) {
+  const conductor = document.getElementById("filtroConductor").value;
+  const vendedor = document.getElementById("filtroVendedor").value;
+  const estado = document.getElementById("filtroEstado").value;
+  const fechaDesde = document.getElementById("filtroFechaDesde").value;
+  const fechaHasta = document.getElementById("filtroFechaHasta").value;
+  // FIX 2026-09-11 (Enrique) — buscador por pasajero o N° de reserva. El N°
+  // de reserva de las OTAs no tiene columna propia, queda dentro de "notas"
+  // (ej. "N° RESERVA: 10581116"), así que la búsqueda mira pasajero
+  // principal + acompañantes (campo `pasajeros`, ya viene combinado desde
+  // api.php) + notas. Todo client-side sobre todosLosViajes, sin tocar
+  // api.php.
+  const elBusqueda = document.getElementById("filtroBusqueda");
+  const busqueda = elBusqueda ? normalizarBusqueda(elBusqueda.value) : "";
+  let filtrados = [...todosLosViajes];
+  if (conductor) {
+    if (conductor === "SIN ASIGNAR") filtrados = filtrados.filter(v => v.conductor === "SIN ASIGNAR" || v.conductor === "");
+    else filtrados = filtrados.filter(v => v.conductor === conductor);
+  }
+  if (vendedor) filtrados = filtrados.filter(v => v.vendedor === vendedor);
+  if (estado) filtrados = filtrados.filter(v => v.estado === estado);
+  if (fechaDesde) filtrados = filtrados.filter(v => { const [d,m,a] = v.fecha.split("/"); return `${a}-${m.padStart(2,"0")}-${d.padStart(2,"0")}` >= fechaDesde; });
+  if (fechaHasta) filtrados = filtrados.filter(v => { const [d,m,a] = v.fecha.split("/"); return `${a}-${m.padStart(2,"0")}-${d.padStart(2,"0")}` <= fechaHasta; });
+  if (busqueda) {
+    filtrados = filtrados.filter(v => {
+      return [v.pasajeroPrincipal, v.pasajeros, v.notas].some(campo => normalizarBusqueda(campo).includes(busqueda));
+    });
+  }
+  const contadorBusqueda = document.getElementById("filtroBusquedaContador");
+  if (contadorBusqueda) {
+    contadorBusqueda.textContent = busqueda ? `${filtrados.length} resultado(s) encontrado(s)` : "";
+  }
+  // Al pulsar "Aplicar" (moverCalendario=true) el calendario salta a la fecha
+  // "desde" elegida — o, si en cambio hay una búsqueda activa con resultados,
+  // salta al primer resultado (el más próximo a hoy hacia adelante; si no hay
+  // ninguno futuro, el más reciente hacia atrás) para "localizar" el viaje de
+  // verdad, no solo filtrarlo entre los meses. En refrescos automáticos o
+  // cambios de vista NO se pasa este flag, así que el calendario no salta
+  // solo mientras el usuario navega.
+  let fechaObjetivoCalendario = null;
+  if (moverCalendario && fechaDesde) {
+    fechaObjetivoCalendario = fechaDesde;
+  } else if (moverCalendario && busqueda && filtrados.length > 0) {
+    const hoyIso = new Date().toISOString().slice(0, 10);
+    const fechasIso = filtrados.map(v => fechaMostrarAIso(v.fecha)).filter(f => f).sort();
+    fechaObjetivoCalendario = fechasIso.find(f => f >= hoyIso) || fechasIso[fechasIso.length - 1] || null;
+  }
+  if (vistaActual === "calendario") renderizarCalendario(filtrados, fechaObjetivoCalendario);
+  else if (vistaActual === "lista") renderizarLista(filtrados);
+}
+function limpiarFiltros() {
+  document.getElementById("filtroConductor").value = "";
+  document.getElementById("filtroVendedor").value = "";
+  document.getElementById("filtroEstado").value = "";
+  document.getElementById("filtroFechaDesde").value = "";
+  document.getElementById("filtroFechaHasta").value = "";
+  const elBusqueda = document.getElementById("filtroBusqueda");
+  if (elBusqueda) elBusqueda.value = "";
+  const contadorBusqueda = document.getElementById("filtroBusquedaContador");
+  if (contadorBusqueda) contadorBusqueda.textContent = "";
+  aplicarFiltros();
+}
+function getColorPorEstado(estado, conductor) {
+  if (!conductor || conductor === "SIN ASIGNAR") return "estado-sin-asignar";
+  if (estado === "COMPLETADO") return "estado-completado";
+  if (estado === "INICIADO") return "estado-iniciado";
+  return "estado-pendiente";
+}
+function renderizarCalendario(viajes, fechaObjetivoStr) {
+  // Recordamos la vista (mes/semana) y la fecha visible antes de destruir el
+  // calendario, para que la auto-actualización o un filtro no lo regresen
+  // solos a "mes". Solo cambia si el usuario pulsa Mes/Semana/Hoy, o si viene
+  // un fechaObjetivoStr explícito (botón "Aplicar" con fecha "desde").
+  const vistaPrevia = calendarInstance ? calendarInstance.view.type : 'dayGridMonth';
+  let fechaPrevia = calendarInstance ? calendarInstance.getDate() : null;
+  if (fechaObjetivoStr) {
+    const [anio, mes, dia] = fechaObjetivoStr.split("-").map(Number);
+    if (anio && mes && dia) fechaPrevia = new Date(anio, mes - 1, dia);
+  }
+  if (calendarInstance) calendarInstance.destroy();
+  const eventos = viajes.map(v => {
+    const [dia, mes, anio] = (v.fecha || "01/07/2026").split("/");
+    const fechaISO = `${anio}-${mes.padStart(2,"0")}-${dia.padStart(2,"0")}`;
+    return {
+      id: v.idEvento,
+      title: `${v.hora || "00:00"} - ${v.trayecto?.substring(0, 35)}${v.trayecto?.length > 35 ? "..." : ""}`,
+      start: fechaISO,
+      extendedProps: { viaje: v },
+      className: getColorPorEstado(v.estado, v.conductor)
+    };
+  });
+  const calendarEl = document.getElementById("calendar");
+  calendarInstance = new FullCalendar.Calendar(calendarEl, {
+    initialView: vistaPrevia, initialDate: fechaPrevia || undefined, locale: 'es',
+    headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,dayGridWeek' },
+    events: eventos,
+    eventClick: function(info) { abrirModal(info.event.extendedProps.viaje); },
+    height: 'auto',
+    buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana' }
+  });
+  calendarInstance.render();
+}
+function renderizarLista(viajes) {
+  const tbody = document.getElementById("tablaViajes");
+  if (viajes.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-400">No hay viajes con los filtros seleccionados</td></tr>'; return; }
+  viajes.sort((a, b) => {
+    const ordenarFecha = (fechaStr) => {
+      if (!fechaStr) return "";
+      const p = fechaStr.split("/");
+      if (p.length !== 3) return "";
+      return `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`;
+    };
+    const fechaA = ordenarFecha(a.fecha);
+    const fechaB = ordenarFecha(b.fecha);
+    const compFecha = fechaA.localeCompare(fechaB);
+    if (compFecha !== 0) return compFecha;
+    return (a.hora || "").localeCompare(b.hora || "");
+  });
+  tbody.innerHTML = viajes.map(v => {
+    const estadoClass = { "COMPLETADO": "bg-green-100 text-green-700", "INICIADO": "bg-yellow-100 text-yellow-700", "PENDIENTE": "bg-red-100 text-red-700" }[v.estado] || "bg-gray-100 text-gray-700";
+    const conductorMostrar = v.conductor || "SIN ASIGNAR";
+    const resellerColor = getColorVendedor(v.vendedor);
+    return `<tr class="border-b hover:bg-gray-50 cursor-pointer" onclick='abrirModal(${JSON.stringify(v).replace(/'/g, "&#39;")})'>
+      <td class="px-4 py-3">${v.fecha || "—"}</td>
+      <td class="px-4 py-3 font-medium text-blue-600">${v.hora || "—"}</td>
+      <td class="px-4 py-3 max-w-xs truncate font-medium">${v.trayecto || "—"}</td>
+      <td class="px-4 py-3"><span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs">👥 ${v.cantidadPasajeros || "?"}</span></td>
+      <td class="px-4 py-3"><span class="bg-gray-100 px-2 py-1 rounded-full text-xs">${conductorMostrar}</span></td>
+      <td class="px-4 py-3"><span style="background-color: ${resellerColor.bg}; color: ${resellerColor.text};" class="px-2 py-1 rounded-full text-xs font-semibold">${v.vendedor || "—"}</span></td>
+      <td class="px-4 py-3"><span class="${estadoClass} px-2 py-1 rounded-full text-xs font-semibold">${v.estado}</span></td>
+      <td class="px-4 py-3 text-center"><button onclick="event.stopPropagation(); abrirModal(${JSON.stringify(v).replace(/'/g, "&#39;")})" class="text-blue-600"><i class="fa-solid fa-eye"></i></button></td>
+     </tr>`;
+  }).join("");
+}
+function construirOpcionesConductores(conductorActual) {
+  const actual = (conductorActual || "").toString().trim().toUpperCase();
+  const nombres = [...conductoresMaestro.map(c => c.nombre)].sort();
+  let opciones = `<option value="POR ASIGNAR" ${actual === "POR ASIGNAR" || actual === "SIN ASIGNAR" || actual === "" ? "selected" : ""}>⚪ POR ASIGNAR</option>`;
+  // Si el conductor actual no está en la tabla `conductores` (nombre viejo/suelto), lo agregamos igual para no perder el dato.
+  if (actual && actual !== "POR ASIGNAR" && actual !== "SIN ASIGNAR" && !nombres.includes(actual)) {
+    opciones += `<option value="${actual}" selected>${actual}</option>`;
+  }
+  nombres.forEach(n => {
+    opciones += `<option value="${n}" ${n === actual ? "selected" : ""}>${n}</option>`;
+  });
+  return opciones;
+}
+function fechaMostrarAIso(fechaDdMmYyyy) {
+  if (!fechaDdMmYyyy) return "";
+  const [d, m, a] = fechaDdMmYyyy.split("/");
+  if (!d || !m || !a) return "";
+  return `${a}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`;
+}
+function abrirModal(viaje) {
+  const overlay = document.getElementById("modalOverlay");
+  const contenido = document.getElementById("modalContenido");
+  const estadoClass = { "COMPLETADO": "bg-green-100 text-green-700", "INICIADO": "bg-yellow-100 text-yellow-700", "PENDIENTE": "bg-red-100 text-red-700" }[viaje.estado] || "bg-gray-100 text-gray-700";
+  const estiloInput = "w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm";
+  const estiloLabel = "block text-xs font-semibold text-gray-500 uppercase mb-1";
+  contenido.innerHTML = `
+    <div class="flex justify-between items-start mb-4">
+      <h3 class="text-xl font-bold">Editar viaje</h3>
+      <button onclick="cerrarModal()" class="text-gray-400 text-2xl">&times;</button>
+    </div>
+    <div class="space-y-3">
+      <div class="border-t pt-3">
+        <p class="text-xs text-gray-500">📌 Estado</p>
+        <span class="inline-block ${estadoClass} px-3 py-1 rounded-full text-sm font-semibold mt-1">${viaje.estado}</span>
+        ${viaje.horaCompletado ? `<span class="text-xs text-green-600 ml-2">Completado: ${viaje.horaCompletado}</span>` : ""}
+        ${viaje.estado !== "COMPLETADO" ? `
+        <div class="mt-2">
+          <button onclick="completarViajeManual('${viaje.idEvento}')" class="text-xs px-3 py-1.5 bg-green-600 text-white rounded-lg font-semibold">
+            <i class="fa-solid fa-check"></i> Marcar como completado (sin foto)
+          </button>
+          <p class="text-[11px] text-gray-400 mt-1">Para conductores que todavía no usan la app. No pide foto de despacho.</p>
+        </div>
+        ` : ""}
+      </div>
+      <div>
+        <label class="${estiloLabel}">Trayecto</label>
+        <input type="text" id="editTrayecto" class="${estiloInput}" value="${(viaje.trayecto || "").replace(/"/g, "&quot;")}">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="${estiloLabel}">📅 Fecha</label>
+          <input type="date" id="editFecha" class="${estiloInput}" value="${fechaMostrarAIso(viaje.fecha)}">
+        </div>
+        <div>
+          <label class="${estiloLabel}">⏰ Hora</label>
+          <input type="time" id="editHora" class="${estiloInput}" value="${viaje.hora || ""}">
+        </div>
+      </div>
+      <div>
+        <label class="${estiloLabel}">📍 Lugar de recogida</label>
+        <input type="text" id="editLugarRecogida" class="${estiloInput}" value="${(viaje.lugarRecogida || "").replace(/"/g, "&quot;")}">
+      </div>
+      <div>
+        <label class="${estiloLabel}">✈️ Vuelo</label>
+        <input type="text" id="editVuelo" class="${estiloInput}" value="${(viaje.vuelo || "").replace(/"/g, "&quot;")}">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="${estiloLabel}">👤 Pasajero principal</label>
+          <input type="text" id="editPasajeroPrincipal" class="${estiloInput}" value="${(viaje.pasajeroPrincipal || "").replace(/"/g, "&quot;")}">
+        </div>
+        <div>
+          <label class="${estiloLabel}">👥 Cantidad pax</label>
+          <input type="number" min="0" id="editCantidadPasajeros" class="${estiloInput}" value="${viaje.cantidadPasajeros || 0}">
+        </div>
+      </div>
+      ${viaje.telefono ? `<a href="https://wa.me/${viaje.telefono.replace(/[^0-9]/g, "")}" target="_blank" class="block bg-green-50 p-2 rounded-lg text-center text-green-700 text-sm font-semibold"><i class="fa-brands fa-whatsapp"></i> WhatsApp: ${viaje.telefono}</a>` : `<p class="text-xs text-gray-400">Sin teléfono registrado</p>`}
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="${estiloLabel}">🚗 Conductor</label>
+          <select id="inputNuevoConductor" class="${estiloInput}">
+            ${construirOpcionesConductores(viaje.conductor)}
+          </select>
+        </div>
+        <div>
+          <label class="${estiloLabel}">💰 Vendedor</label>
+          <input type="text" id="editVendedor" class="${estiloInput}" value="${(viaje.vendedor || "").replace(/"/g, "&quot;")}">
+        </div>
+      </div>
+      <div>
+        <label class="${estiloLabel}">🧭 Guía / Asistencia (nombre)</label>
+        <input type="text" id="editGuiaNombre" class="${estiloInput}" list="listaGuiasSugeridas" value="${(viaje.guiaNombre || "").replace(/"/g, "&quot;")}" placeholder="Dejar vacío si este viaje no necesita guía">
+        <datalist id="listaGuiasSugeridas">
+          ${conductoresMaestro.map(c => `<option value="${c.nombre}">`).join("")}
+        </datalist>
+        <p class="text-[11px] text-gray-400 mt-1">Puede ser uno de los conductores de arriba o alguien externo — el monto a pagarle se asigna después en Reportes.</p>
+      </div>
+      <div>
+        <label class="${estiloLabel}">📝 Notas</label>
+        <textarea id="editNotas" class="${estiloInput}" rows="2">${viaje.notas || ""}</textarea>
+      </div>
+      <div>
+        <label class="${estiloLabel}">🗒️ Notas para el conductor</label>
+        <p class="text-xs text-gray-400 mb-1">Recordatorios o aclaraciones para el conductor. Se ve en su app, no en reportes.</p>
+        <textarea id="editNotasConductor" class="${estiloInput}" rows="2">${viaje.notasConductor || ""}</textarea>
+      </div>
+      ${viaje.facturaUrl ? `<a href="${viaje.facturaUrl}" target="_blank" class="block bg-green-50 p-2 rounded-lg text-center text-green-700 text-sm"><i class="fa-solid fa-file-invoice-dollar"></i> Ver factura</a>` : ""}
+      ${viaje.fotoDespachoUrl ? `<a href="${viaje.fotoDespachoUrl}" target="_blank" class="block bg-blue-50 p-2 rounded-lg text-center text-blue-700 text-sm"><i class="fa-solid fa-camera"></i> Ver foto de despacho</a>` : ""}
+    </div>
+    <div class="flex gap-2 mt-5">
+      <button onclick="cerrarModal()" class="flex-1 px-4 py-2 bg-gray-200 rounded-lg">Cerrar</button>
+      <button onclick="eliminarViaje('${viaje.idEvento}', '${(viaje.trayecto || '').replace(/'/g, "\\'")}')" class="px-4 py-2 bg-red-100 text-red-700 rounded-lg font-semibold">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+      <button onclick="guardarCambiosViaje('${viaje.idEvento}')" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">
+        <i class="fa-solid fa-floppy-disk"></i> Guardar cambios
+      </button>
+    </div>
+  `;
+  overlay.style.display = "flex";
+}
+function cerrarModal() { document.getElementById("modalOverlay").style.display = "none"; }
+function cerrarModalSiOverlay(e) { if (e.target === document.getElementById("modalOverlay")) cerrarModal(); }
+async function eliminarViaje(idEvento, trayecto) {
+  const confirmacion = prompt(
+    `Esto envía este viaje a la Papelera:\n"${trayecto}"\n\nSe puede restaurar después desde el botón "Papelera" (arriba a la derecha). Escribe ELIMINAR (en mayúsculas) para confirmar:`
+  );
+  if (confirmacion !== "ELIMINAR") {
+    if (confirmacion !== null) alert("No coincide con \"ELIMINAR\". No se borró nada.");
+    return;
+  }
+  try {
+    const resp = await fetch(URL_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idEvento, accion: "ELIMINAR_VIAJE", adminKey: ADMIN_API_KEY })
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      alert("No se pudo eliminar: " + (data.error || "Error desconocido"));
+      return;
+    }
+    cerrarModal();
+    await cargarDatos();
+  } catch (e) {
+    alert("No se pudo eliminar. Revisa tu conexión.");
+  }
+}
+// Marca un viaje como COMPLETADO desde el panel, sin pasar por la app del
+// conductor y sin pedir foto de despacho. Pensado para conductores que
+// todavía no usan la app. Llama a una acción de admin nueva y separada de
+// EDITAR_VIAJE (COMPLETAR_VIAJE_MANUAL), para no mezclar esto con la edición
+// genérica de campos del viaje.
+async function completarViajeManual(idEvento) {
+  if (!confirm("¿Marcar este viaje como COMPLETADO?\n\nNo se puede deshacer desde el panel (no vuelve a PENDIENTE/INICIADO).")) return;
+  try {
+    const resp = await fetch(URL_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idEvento, accion: "COMPLETAR_VIAJE_MANUAL", adminKey: ADMIN_API_KEY })
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      alert("No se pudo completar: " + (data.error || "Error desconocido"));
+      return;
+    }
+    cerrarModal();
+    await cargarDatos();
+  } catch (e) {
+    alert("No se pudo completar. Revisa tu conexión.");
+  }
+}
+async function guardarCambiosViaje(idEvento) {
+  const payload = {
+    idEvento,
+    accion: "EDITAR_VIAJE",
+    adminKey: ADMIN_API_KEY,
+    trayecto: document.getElementById("editTrayecto").value.trim(),
+    fecha: document.getElementById("editFecha").value,
+    hora: document.getElementById("editHora").value,
+    lugar_recogida: document.getElementById("editLugarRecogida").value.trim(),
+    vuelo: document.getElementById("editVuelo").value.trim(),
+    pasajero_principal: document.getElementById("editPasajeroPrincipal").value.trim(),
+    cantidad_pasajeros: parseInt(document.getElementById("editCantidadPasajeros").value) || 0,
+    conductor: document.getElementById("inputNuevoConductor").value.trim(),
+    vendedor: document.getElementById("editVendedor").value.trim(),
+    guia_nombre: document.getElementById("editGuiaNombre").value.trim(),
+    notas: document.getElementById("editNotas").value.trim(),
+    notas_conductor: document.getElementById("editNotasConductor").value.trim()
+  };
+  try {
+    const resp = await fetch(URL_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      alert("No se pudo guardar: " + (data.error || "Error desconocido"));
+      return;
+    }
+    cerrarModal();
+    await cargarDatos();
+  } catch (e) {
+    alert("No se pudo guardar. Revisa tu conexión.");
+  }
+}
+// ═══════════════════════════════════════════════════════════
+// PAPELERA (viajes eliminados, recuperables)
+// ═══════════════════════════════════════════════════════════
+async function cargarPapelera() {
+  const contenedor = document.getElementById("listaPapelera");
+  contenedor.innerHTML = '<div class="text-center py-8 text-gray-400">Cargando...</div>';
+  try {
+    const resp = await fetch(URL_API + "?papelera=1&adminKey=" + encodeURIComponent(ADMIN_API_KEY) + "&t=" + Date.now());
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    renderizarListaPapelera(data.traslados || []);
+  } catch (e) {
+    contenedor.innerHTML = '<div class="text-center py-8 text-red-500">No se pudo cargar la papelera.</div>';
+  }
+}
+function renderizarListaPapelera(viajes) {
+  const contenedor = document.getElementById("listaPapelera");
+  if (viajes.length === 0) { contenedor.innerHTML = '<div class="text-center py-8 text-gray-400">La papelera está vacía</div>'; return; }
+  contenedor.innerHTML = viajes.map(v => `
+    <div class="border rounded-lg p-3 flex flex-col md:flex-row justify-between gap-3">
+      <div class="flex-1">
+        <p class="font-medium">${(v.trayecto || "—")}</p>
+        <div class="flex flex-wrap gap-3 text-xs text-gray-500 mt-1">
+          <span><i class="fa-regular fa-calendar"></i> ${v.fecha || "—"}</span>
+          <span><i class="fa-regular fa-clock"></i> ${v.hora || "—"}</span>
+          <span><i class="fa-solid fa-user"></i> ${v.conductor || "SIN ASIGNAR"}</span>
+          <span class="text-red-500"><i class="fa-solid fa-trash"></i> Eliminado: ${v.fechaEliminado || "—"}</span>
+        </div>
+      </div>
+      <div class="flex gap-2 items-center">
+        <button onclick="restaurarViaje('${v.idEvento}')" class="bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1">
+          <i class="fa-solid fa-clock-rotate-left"></i> Restaurar
+        </button>
+      </div>
+    </div>
+  `).join("");
+}
+async function restaurarViaje(idEvento) {
+  try {
+    const resp = await fetch(URL_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idEvento, accion: "RESTAURAR_VIAJE", adminKey: ADMIN_API_KEY })
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      alert("No se pudo restaurar: " + (data.error || "Error desconocido"));
+      return;
+    }
+    await cargarPapelera();
+    await cargarDatos();
+  } catch (e) {
+    alert("No se pudo restaurar. Revisa tu conexión.");
+  }
+}
+function abrirModalPapelera() { document.getElementById("modalPapeleraOverlay").style.display = "flex"; cargarPapelera(); }
+function cerrarModalPapelera() { document.getElementById("modalPapeleraOverlay").style.display = "none"; }
+function cerrarModalPapeleraSiOverlay(e) { if (e.target === document.getElementById("modalPapeleraOverlay")) cerrarModalPapelera(); }
+// ═══════════════════════════════════════════════════════════
+// CONDUCTORES: alta, baja (solo sin viajes asignados) y activar/desactivar
+// ═══════════════════════════════════════════════════════════
+async function cargarConductoresDetalle() {
+  const tbody = document.getElementById("tablaConductores");
+  try {
+    const res = await fetch(URL_API + "?accion=listar_conductores&clave=REEMPLAZA_CON_TU_CLAVE_DE_LECTURA&t=" + Date.now());
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const raw = await res.json();
+    if (raw.error) throw new Error(raw.error);
+    conductoresDetalle = raw.conductores || [];
+    renderizarConductores();
+  } catch (e) {
+    console.error("Error cargando conductores:", e);
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-red-400">No se pudo cargar la lista de conductores</td></tr>';
+  }
+}
+function renderizarConductores() {
+  const tbody = document.getElementById("tablaConductores");
+  const badge = document.getElementById("totalConductoresBadge");
+  if (badge) badge.textContent = conductoresDetalle.length + " total";
+  if (!tbody) return;
+  if (conductoresDetalle.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-400">No hay conductores registrados</td></tr>';
+    return;
+  }
+  tbody.innerHTML = conductoresDetalle.map(c => {
+    const activo = Number(c.activo) === 1;
+    const tipo = (c.tipo_conductor || "externo") === "interno" ? "Interno" : "Externo";
+    const vehiculo = c.tipo_vehiculo === "sedan_van" ? "Sedán/Van" : (c.tipo_vehiculo === "hiace_bus" ? "Hiace/Bus" : "—");
+    const viajes = parseInt(c.viajes_asignados) || 0;
+    const nombreEscapado = (c.nombre || "").replace(/'/g, "\\'");
+    const tieneEmail = !!(c.email && c.email.trim() !== "");
+    return `<tr class="border-b hover:bg-gray-50">
+      <td class="px-4 py-3 font-medium">${c.nombre}</td>
+      <td class="px-4 py-3 font-mono">${c.pin || "—"}</td>
+      <td class="px-4 py-3">
+        <button onclick="editarEmailConductor('${nombreEscapado}', '${(c.email || '').replace(/'/g, "\\'")}')" class="${tieneEmail ? 'text-gray-700' : 'text-gray-400 italic'} hover:text-blue-600 text-left" title="Editar email">
+          ${tieneEmail ? c.email : 'sin email —'} <i class="fa-solid fa-pen text-xs ml-1 text-gray-300"></i>
+        </button>
+      </td>
+      <td class="px-4 py-3">${tipo}</td>
+      <td class="px-4 py-3">${vehiculo}</td>
+      <td class="px-4 py-3"><span class="${activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'} px-2 py-1 rounded-full text-xs font-semibold">${activo ? 'Activo' : 'Inactivo'}</span></td>
+      <td class="px-4 py-3">${viajes}</td>
+      <td class="px-4 py-3 text-center whitespace-nowrap">
+        <button onclick="enviarCredencialesConductor('${nombreEscapado}')" class="${tieneEmail ? 'text-green-600' : 'text-gray-300'} mr-3" title="${tieneEmail ? 'Enviar credenciales por correo' : 'Este conductor no tiene email cargado'}" ${tieneEmail ? '' : 'disabled'}>
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
+        <button onclick="toggleActivoConductor('${nombreEscapado}', ${activo})" class="text-blue-600 mr-3" title="${activo ? 'Desactivar' : 'Activar'}">
+          <i class="fa-solid ${activo ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
+        </button>
+        <button onclick="eliminarConductor('${nombreEscapado}', ${viajes})" class="${viajes > 0 ? 'text-gray-300' : 'text-red-600'}" title="${viajes > 0 ? 'No se puede eliminar: tiene viajes asignados' : 'Eliminar'}">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+async function editarEmailConductor(nombre, emailActual) {
+  const nuevoEmail = prompt(`Email para ${nombre} (dejar vacío para borrarlo):`, emailActual || "");
+  if (nuevoEmail === null) return; // canceló
+  try {
+    const resp = await fetch(URL_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accion: "EDITAR_EMAIL_CONDUCTOR", adminKey: ADMIN_API_KEY, nombre, email: nuevoEmail.trim() })
+    });
+    const data = await resp.json();
+    if (!data.success) { alert("No se pudo guardar: " + (data.error || "Error desconocido")); return; }
+    await cargarConductoresDetalle();
+  } catch (e) {
+    alert("No se pudo guardar. Revisa tu conexión.");
+  }
+}
+async function enviarCredencialesConductor(nombre) {
+  if (!confirm(`¿Mandarle a ${nombre} un correo con el link de la app y su PIN?`)) return;
+  try {
+    const resp = await fetch(URL_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accion: "ENVIAR_CREDENCIALES_CONDUCTOR", adminKey: ADMIN_API_KEY, nombre })
+    });
+    const data = await resp.json();
+    if (!data.success) { alert("No se pudo enviar: " + (data.error || "Error desconocido")); return; }
+    alert(`Correo enviado a ${nombre}.`);
+  } catch (e) {
+    alert("No se pudo enviar. Revisa tu conexión.");
+  }
+}
+async function enviarCredencialesATodos() {
+  if (!confirm("¿Mandarle el correo de credenciales (link de la app + su PIN) a TODOS los conductores activos que tengan email cargado?")) return;
+  try {
+    const resp = await fetch(URL_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accion: "ENVIAR_CREDENCIALES_TODOS", adminKey: ADMIN_API_KEY })
+    });
+    const data = await resp.json();
+    if (!data.success) { alert("No se pudo enviar: " + (data.error || "Error desconocido")); return; }
+    let msg = `Enviado a ${data.enviados} de ${data.totalActivos} conductores activos.`;
+    if (data.sinEmail > 0) msg += `\n${data.sinEmail} no tienen email cargado.`;
+    if (data.fallidos && data.fallidos.length > 0) msg += `\nFallaron: ${data.fallidos.join(", ")}`;
+    alert(msg);
+  } catch (e) {
+    alert("No se pudo enviar. Revisa tu conexión.");
+  }
+}
+function abrirModalNuevoConductor() {
+  document.getElementById("nuevoConductorNombre").value = "";
+  document.getElementById("nuevoConductorPin").value = "";
+  document.getElementById("nuevoConductorEmail").value = "";
+  document.getElementById("nuevoConductorTipo").value = "externo";
+  onCambioTipoConductor();
+  document.getElementById("modalConductorOverlay").style.display = "flex";
+}
+function cerrarModalConductor() { document.getElementById("modalConductorOverlay").style.display = "none"; }
+function cerrarModalConductorSiOverlay(e) { if (e.target === document.getElementById("modalConductorOverlay")) cerrarModalConductor(); }
+function onCambioTipoConductor() {
+  const esInterno = document.getElementById("nuevoConductorTipo").value === "interno";
+  document.getElementById("campoVehiculoConductor").classList.toggle("hidden", !esInterno);
+}
+async function guardarNuevoConductor() {
+  const nombre = document.getElementById("nuevoConductorNombre").value.trim();
+  if (!nombre) { alert("Ingresa el nombre del conductor."); return; }
+  const pin = document.getElementById("nuevoConductorPin").value.trim();
+  const email = document.getElementById("nuevoConductorEmail").value.trim();
+  const tipo_conductor = document.getElementById("nuevoConductorTipo").value;
+  const tipo_vehiculo = tipo_conductor === "interno" ? document.getElementById("nuevoConductorVehiculo").value : null;
+  try {
+    const resp = await fetch(URL_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accion: "AGREGAR_CONDUCTOR", adminKey: ADMIN_API_KEY, nombre, pin, email, tipo_conductor, tipo_vehiculo })
+    });
+    const data = await resp.json();
+    if (!data.success) { alert("No se pudo agregar: " + (data.error || "Error desconocido")); return; }
+    cerrarModalConductor();
+    await cargarConductoresDetalle();
+    await cargarDatosDesdeAPI(false);
+    alert(`Conductor agregado.\nPIN para entrar a su app: ${data.pin}`);
+  } catch (e) {
+    alert("No se pudo agregar. Revisa tu conexión.");
+  }
+}
+async function eliminarConductor(nombre, viajesAsignados) {
+  if (viajesAsignados > 0) {
+    alert(`No se puede eliminar a ${nombre}: tiene ${viajesAsignados} viaje(s) asignado(s). Reasígnalos o desactívalo en su lugar.`);
+    return;
+  }
+  if (!confirm(`¿Eliminar al conductor "${nombre}"? Esta acción no se puede deshacer.`)) return;
+  try {
+    const resp = await fetch(URL_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accion: "ELIMINAR_CONDUCTOR", adminKey: ADMIN_API_KEY, nombre })
+    });
+    const data = await resp.json();
+    if (!data.success) { alert("No se pudo eliminar: " + (data.error || "Error desconocido")); return; }
+    await cargarConductoresDetalle();
+    await cargarDatosDesdeAPI(false);
+  } catch (e) {
+    alert("No se pudo eliminar. Revisa tu conexión.");
+  }
+}
+async function toggleActivoConductor(nombre, activoActual) {
+  try {
+    const resp = await fetch(URL_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accion: "TOGGLE_ACTIVO_CONDUCTOR", adminKey: ADMIN_API_KEY, nombre, activo: activoActual ? 0 : 1 })
+    });
+    const data = await resp.json();
+    if (!data.success) { alert("No se pudo actualizar: " + (data.error || "Error desconocido")); return; }
+    await cargarConductoresDetalle();
+    await cargarDatosDesdeAPI(false);
+  } catch (e) {
+    alert("No se pudo actualizar. Revisa tu conexión.");
+  }
+}
+function cambiarVista(vista) {
+  vistaActual = vista;
+  const btnCal = document.getElementById("btnVistaCalendario");
+  const btnLista = document.getElementById("btnVistaLista");
+  const btnReportes = document.getElementById("btnVistaReportes");
+  const btnConductores = document.getElementById("btnVistaConductores");
+  const btnForm = document.getElementById("btnVistaFormularios");
+  const btnDispo = document.getElementById("btnVistaDisponibilidad");
+  const divCal = document.getElementById("vistaCalendario");
+  const divLista = document.getElementById("vistaLista");
+  const divReportes = document.getElementById("vistaReportes");
+  const divConductores = document.getElementById("vistaConductores");
+  const divForm = document.getElementById("vistaFormularios");
+  const divDispo = document.getElementById("vistaDisponibilidad");
+  const panelResumen = document.getElementById("panelResumenGeneral");
+  const panelFiltros = document.getElementById("panelFiltros");
+  const activo = "px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold flex items-center gap-2";
+  const inactivo = "px-4 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold flex items-center gap-2";
+  btnCal.className = vista === "calendario" ? activo : inactivo;
+  btnLista.className = vista === "lista" ? activo : inactivo;
+  btnReportes.className = vista === "reportes" ? activo : inactivo;
+  btnConductores.className = vista === "conductores" ? activo : inactivo;
+  btnForm.className = vista === "formularios" ? activo : inactivo;
+  if (btnDispo) btnDispo.className = vista === "disponibilidad" ? activo : inactivo;
+  divCal.classList.add("hidden");
+  divLista.classList.add("hidden");
+  divReportes.classList.add("hidden");
+  divConductores.classList.add("hidden");
+  divForm.classList.add("hidden");
+  if (divDispo) divDispo.classList.add("hidden");
+  panelResumen.classList.remove("hidden");
+  // Los filtros (conductor/vendedor/estado/fechas) solo tienen sentido en
+  // Calendario y Lista — en Reportes, Conductores, Formularios y
+  // Disponibilidad se ocultan.
+  if (panelFiltros) panelFiltros.classList.toggle("hidden", vista === "reportes" || vista === "conductores" || vista === "formularios" || vista === "disponibilidad");
+  if (vista === "calendario") {
+    divCal.classList.remove("hidden");
+    if (calendarInstance) setTimeout(() => calendarInstance.updateSize(), 100);
+    aplicarFiltros();
+  } else if (vista === "lista") {
+    divLista.classList.remove("hidden");
+    aplicarFiltros();
+  } else if (vista === "reportes") {
+    panelResumen.classList.add("hidden");
+    divReportes.classList.remove("hidden");
+    if (typeof rpCargarTarifas === "function") rpCargarTarifas();
+    if (typeof rpCargarReporte === "function") rpCargarReporte();
+  } else if (vista === "conductores") {
+    panelResumen.classList.add("hidden");
+    divConductores.classList.remove("hidden");
+    cargarConductoresDetalle();
+  } else if (vista === "formularios") {
+    panelResumen.classList.add("hidden");
+    divForm.classList.remove("hidden");
+    inicializarTabsFormularios();
+  } else if (vista === "disponibilidad") {
+    panelResumen.classList.add("hidden");
+    divDispo.classList.remove("hidden");
+    dispoInicializar();
+  }
+}
+// ═══════════════════════════════════════════════════════════
+// DISPONIBILIDAD DE TOURS — calendario manual (2026-09).
+// No lee datos de viajes/reservas reales: es una tabla aparte donde tú
+// marcas a mano qué tours tienen cupo cada día. Se guarda en
+// disponibilidad-api.php (mismo servidor que api.php). El calendario
+// público (calendario-tours.html) lee estos mismos datos.
+// ═══════════════════════════════════════════════════════════
+const DISPONIBILIDAD_API_URL = "https://api.tudominio.com/disponibilidad-api.php";
+let dispoMesActual = new Date();
+dispoMesActual.setDate(1);
+let dispoDatos = {}; // { tourId: ["2026-09-05", ...] } — último snapshot conocido del servidor
+let dispoCargado = false;
+function dispoClaveMes(fecha) {
+  return fecha.getFullYear() + "-" + String(fecha.getMonth() + 1).padStart(2, "0");
+}
+function dispoFechaISO(anio, mes, dia) {
+  return `${anio}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+}
+let dispoDiaSeleccionado = null; // fecha ISO del día abierto en el panel de abajo
+async function dispoInicializar() {
+  if (typeof TOURS_DISPONIBILIDAD === "undefined") {
+    document.getElementById("dispoMsg").innerHTML = '<span class="text-red-600">No se pudo cargar la lista de tours desde https://api.tudominio.com/tours-config.js — confirma que ese archivo esté subido ahí.</span>';
+    return;
+  }
+  if (!dispoCargado) {
+    await dispoCargarDesdeServidor();
+    dispoCargado = true;
+    // Al abrir la pestaña por primera vez, seleccionamos hoy de una vez
+    // (si cae en el mes que se está mostrando) para no obligar a tocar
+    // un día antes de poder marcar algo.
+    const hoy = new Date();
+    if (hoy.getFullYear() === dispoMesActual.getFullYear() && hoy.getMonth() === dispoMesActual.getMonth()) {
+      dispoDiaSeleccionado = dispoFechaISO(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    }
+  }
+  dispoRenderizarCalendario();
+  dispoRenderizarPanelDia();
+}
+async function dispoCargarDesdeServidor() {
+  document.getElementById("dispoMsg").textContent = "Cargando disponibilidad guardada...";
+  try {
+    const resp = await fetch(DISPONIBILIDAD_API_URL + "?t=" + Date.now());
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.error || "Error desconocido");
+    dispoDatos = data.disponibilidad || {};
+    document.getElementById("dispoMsg").textContent = "";
+  } catch (e) {
+    document.getElementById("dispoMsg").innerHTML = '<span class="text-red-600">No se pudo cargar la disponibilidad guardada (¿ya subiste disponibilidad-api.php?). Revisa tu conexión.</span>';
+  }
+}
+function dispoCambiarMes(delta) {
+  dispoMesActual.setMonth(dispoMesActual.getMonth() + delta);
+  // Al cambiar de mes soltamos la selección: el día marcado era de otro
+  // mes y ya no está a la vista, así que el panel de abajo se limpia y
+  // pide tocar un día nuevo, en vez de mostrar un día que no se ve.
+  dispoDiaSeleccionado = null;
+  dispoRenderizarCalendario();
+  dispoRenderizarPanelDia();
+}
+function dispoSeleccionarDia(iso) {
+  dispoDiaSeleccionado = iso;
+  dispoRenderizarCalendario();
+  dispoRenderizarPanelDia();
+}
+// Calendario del mes: SOLO número de día + un contador chiquito de cuántos
+// tours están activos ese día. A propósito no mete texto de tours acá
+// (por eso rompía en mobile antes) — el detalle vive abajo, en el panel
+// del día seleccionado.
+function dispoRenderizarCalendario() {
+  const anio = dispoMesActual.getFullYear();
+  const mes = dispoMesActual.getMonth();
+  const primerDiaSemana = new Date(anio, mes, 1).getDay();
+  const diasEnMes = new Date(anio, mes + 1, 0).getDate();
+  const nombreMes = dispoMesActual.toLocaleDateString("es", { month: "long", year: "numeric" });
+  document.getElementById("dispoMesLabel").textContent = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
+
+  const diasSemana = ["D", "L", "M", "X", "J", "V", "S"];
+  let html = diasSemana.map(d => `<div class="text-[10px] font-bold text-gray-400 text-center py-1">${d}</div>`).join("");
+  for (let i = 0; i < primerDiaSemana; i++) html += `<div></div>`;
+  for (let d = 1; d <= diasEnMes; d++) {
+    const iso = dispoFechaISO(anio, mes, d);
+    const count = TOURS_DISPONIBILIDAD.filter(t => (dispoDatos[t.id] || []).includes(iso)).length;
+    const esSeleccionado = iso === dispoDiaSeleccionado;
+    html += `
+      <button type="button" onclick="dispoSeleccionarDia('${iso}')" class="relative aspect-square min-w-0 rounded-lg border text-xs sm:text-sm font-semibold flex items-center justify-center
+        ${esSeleccionado ? "border-blue-600 border-2 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-700 hover:bg-gray-50"}">
+        ${d}
+        ${count > 0 ? `<span class="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] leading-none font-bold rounded-full w-4 h-4 flex items-center justify-center">${count}</span>` : ""}
+      </button>`;
+  }
+  document.getElementById("dispoCalGrid").innerHTML = html;
+}
+// Panel del día seleccionado: un switch por tour, cada toque guarda solo
+// (no hay botón "Guardar" aparte — así no se puede olvidar guardar).
+function dispoRenderizarPanelDia() {
+  const cont = document.getElementById("dispoPanelDia");
+  if (!dispoDiaSeleccionado) {
+    cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-6">Toca un día del calendario para ver y activar sus tours.</p>';
+    return;
+  }
+  const [a, m, d] = dispoDiaSeleccionado.split("-").map(Number);
+  const nombreFecha = new Date(a, m - 1, d).toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" });
+  let html = `
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <p class="font-semibold text-sm text-gray-700">${nombreFecha.charAt(0).toUpperCase() + nombreFecha.slice(1)}</p>
+      <div class="flex gap-2 flex-shrink-0">
+        <button onclick="dispoMarcarTodosDia(true)" class="px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-semibold">Marcar todos</button>
+        <button onclick="dispoMarcarTodosDia(false)" class="px-2.5 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-semibold">Ninguno</button>
+      </div>
+    </div>
+    <div class="divide-y lg:max-h-[420px] lg:overflow-y-auto lg:pr-2">`;
+  TOURS_DISPONIBILIDAD.forEach(tour => {
+    const marcado = (dispoDatos[tour.id] || []).includes(dispoDiaSeleccionado);
+    html += `
+      <label class="flex items-center justify-between gap-3 py-2.5 cursor-pointer">
+        <span class="text-sm text-gray-700 pr-2">${tour.nombre}</span>
+        <span class="relative inline-flex items-center flex-shrink-0">
+          <input type="checkbox" class="peer sr-only" data-tour="${tour.id}" ${marcado ? "checked" : ""} onchange="dispoToggleDia(this)">
+          <span class="w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-green-500 transition-colors"></span>
+          <span class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></span>
+        </span>
+      </label>`;
+  });
+  html += "</div>";
+  cont.innerHTML = html;
+}
+async function dispoToggleDia(input) {
+  const tourId = input.dataset.tour;
+  const fecha = dispoDiaSeleccionado;
+  if (!dispoDatos[tourId]) dispoDatos[tourId] = [];
+  const idx = dispoDatos[tourId].indexOf(fecha);
+  if (input.checked && idx === -1) dispoDatos[tourId].push(fecha);
+  if (!input.checked && idx !== -1) dispoDatos[tourId].splice(idx, 1);
+  dispoRenderizarCalendario(); // refresca el contador del día en el calendario
+  await dispoGuardarEnServidor({ [tourId]: (dispoDatos[tourId] || []).filter(f => f.startsWith(dispoClaveMes(dispoMesActual))) });
+}
+async function dispoMarcarTodosDia(marcar) {
+  if (!dispoDiaSeleccionado) return;
+  const fecha = dispoDiaSeleccionado;
+  const mesClave = dispoClaveMes(dispoMesActual);
+  const datos = {};
+  TOURS_DISPONIBILIDAD.forEach(tour => {
+    if (!dispoDatos[tour.id]) dispoDatos[tour.id] = [];
+    const idx = dispoDatos[tour.id].indexOf(fecha);
+    if (marcar && idx === -1) dispoDatos[tour.id].push(fecha);
+    if (!marcar && idx !== -1) dispoDatos[tour.id].splice(idx, 1);
+    datos[tour.id] = dispoDatos[tour.id].filter(f => f.startsWith(mesClave));
+  });
+  dispoRenderizarCalendario();
+  dispoRenderizarPanelDia();
+  await dispoGuardarEnServidor(datos);
+}
+async function dispoGuardarEnServidor(datosParciales) {
+  const mesClave = dispoClaveMes(dispoMesActual);
+  document.getElementById("dispoMsg").innerHTML = "Guardando...";
+  try {
+    const resp = await fetch(DISPONIBILIDAD_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adminKey: ADMIN_API_KEY, mes: mesClave, datos: datosParciales })
+    });
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.error || "Error desconocido");
+    dispoDatos = data.disponibilidad || dispoDatos;
+    document.getElementById("dispoMsg").innerHTML = '<span class="text-green-600 font-semibold">Guardado ✓</span>';
+    setTimeout(() => {
+      const el = document.getElementById("dispoMsg");
+      if (el && el.innerHTML.includes("Guardado")) el.innerHTML = "";
+    }, 1500);
+  } catch (e) {
+    document.getElementById("dispoMsg").innerHTML = '<span class="text-red-600">No se pudo guardar: ' + e.message + "</span>";
+  }
+}
+function calcularResumenDocumentos() {
+  const facturas = todosLosViajes.filter(v => v.facturaUrl && !v.facturaUrl.includes("pendiente"));
+  const despachos = todosLosViajes.filter(v => v.fotoDespachoUrl);
+  const sinDocs = todosLosViajes.filter(v => (!v.facturaUrl || v.facturaUrl === "") && (!v.fotoDespachoUrl || v.fotoDespachoUrl === ""));
+  document.getElementById("resumenDocumentos").innerHTML = `
+    <div class="bg-green-50 rounded-lg p-3 text-center"><p class="text-2xl font-bold text-green-600">${facturas.length}</p><p class="text-xs">📄 Facturas</p></div>
+    <div class="bg-blue-50 rounded-lg p-3 text-center"><p class="text-2xl font-bold text-blue-600">${despachos.length}</p><p class="text-xs">📸 Fotos despacho</p></div>
+    <div class="bg-yellow-50 rounded-lg p-3 text-center"><p class="text-2xl font-bold text-yellow-600">${facturas.length + despachos.length}</p><p class="text-xs">🖼️ Total</p></div>
+    <div class="bg-gray-50 rounded-lg p-3 text-center"><p class="text-2xl font-bold text-gray-600">${sinDocs.length}</p><p class="text-xs">📂 Sin documentos</p></div>
+  `;
+}
+function abrirModalDocumentos() { document.getElementById("modalDocumentosOverlay").style.display = "flex"; filtrarDocumentos(filtroDocumentosActual); }
+function cerrarModalDocumentos() { document.getElementById("modalDocumentosOverlay").style.display = "none"; }
+function cerrarModalDocumentosSiOverlay(e) { if (e.target === document.getElementById("modalDocumentosOverlay")) cerrarModalDocumentos(); }
+function filtrarDocumentos(tipo) {
+  filtroDocumentosActual = tipo;
+  const botones = ["todas", "factura", "despacho", "sin"];
+  botones.forEach(b => { const btn = document.getElementById(`docFiltro${b.charAt(0).toUpperCase() + b.slice(1)}`); if(btn) btn.className = b === tipo ? "px-3 py-1 rounded-full text-sm bg-blue-600 text-white" : "px-3 py-1 rounded-full text-sm bg-gray-200"; });
+  let filtrados = [...todosLosViajes];
+  if (tipo === "factura") filtrados = filtrados.filter(v => v.facturaUrl && !v.facturaUrl.includes("pendiente"));
+  else if (tipo === "despacho") filtrados = filtrados.filter(v => v.fotoDespachoUrl);
+  else if (tipo === "sin") filtrados = filtrados.filter(v => (!v.facturaUrl || v.facturaUrl === "") && (!v.fotoDespachoUrl || v.fotoDespachoUrl === ""));
+  renderizarListaDocumentos(filtrados);
+}
+function renderizarListaDocumentos(viajes) {
+  const container = document.getElementById("listaDocumentos");
+  if (viajes.length === 0) { container.innerHTML = '<div class="text-center py-8 text-gray-400">No hay documentos</div>'; return; }
+  viajes.sort((a, b) => {
+    const ordenarFecha = (fechaStr) => {
+      if (!fechaStr) return "";
+      const p = fechaStr.split("/");
+      if (p.length !== 3) return "";
+      return `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`;
+    };
+    const comp = ordenarFecha(a.fecha).localeCompare(ordenarFecha(b.fecha));
+    return comp !== 0 ? comp : (a.hora || "").localeCompare(b.hora || "");
+  });
+  container.innerHTML = viajes.map(v => {
+    const tieneFactura = v.facturaUrl && !v.facturaUrl.includes("pendiente");
+    const tieneDespacho = v.fotoDespachoUrl;
+    return `<div class="border rounded-lg p-3 hover:bg-gray-50"><div class="flex flex-col md:flex-row justify-between gap-3"><div class="flex-1"><p class="font-medium">${v.trayecto?.substring(0, 50)}${v.trayecto?.length > 50 ? "..." : ""}</p><div class="flex gap-3 text-xs text-gray-500 mt-1"><span><i class="fa-regular fa-calendar"></i> ${v.fecha}</span><span><i class="fa-regular fa-clock"></i> ${v.hora}</span><span><i class="fa-solid fa-user"></i> ${v.conductor || "SIN ASIGNAR"}</span></div></div><div class="flex gap-2">${tieneDespacho ? `<a href="${v.fotoDespachoUrl}" target="_blank" class="bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg text-sm flex items-center gap-1"><i class="fa-solid fa-camera"></i> Despacho</a>` : `<span class="bg-gray-100 text-gray-400 px-3 py-1.5 rounded-lg text-sm"><i class="fa-solid fa-camera"></i> Sin foto</span>`}${tieneFactura ? `<a href="${v.facturaUrl}" target="_blank" class="bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-sm flex items-center gap-1"><i class="fa-solid fa-file-invoice-dollar"></i> Factura</a>` : `<span class="bg-gray-100 text-gray-400 px-3 py-1.5 rounded-lg text-sm"><i class="fa-solid fa-file-invoice-dollar"></i> Sin factura</span>`}</div></div></div>`;
+  }).join("");
+}
+// ═══════════════════════════════════════════════════════════
+// REPORTES DE TRAYECTOS Y PAGOS A CONDUCTORES
+// (reportes.php debe vivir junto a admin.html, en Panel_admin/)
+// ═══════════════════════════════════════════════════════════
+(function () {
+  function rpGetAdminKey() {
+    // Reutiliza la MISMA clave que ya usa admin.html en CAMBIAR_CONDUCTOR /
+    // ELIMINAR_VIAJE (declarada arriba, al inicio del <body>).
+    return ADMIN_API_KEY;
+  }
+  const RP_BASE = 'reportes.php'; // reportes.php vive junto a admin.html en Panel_admin/
+  let rpUltimasFilas = []; // última tabla ya armada (con trayecto real) — se reutiliza para exportar XLSX
+  window.rpMsg = function (texto, tipo) {
+    const el = document.getElementById('rp-msg');
+    el.textContent = texto;
+    el.className = 'rp-msg ' + (tipo || '');
+  };
+  function rpFiltrosQuery() {
+    // El filtro de trayecto NO se manda al backend: ese texto no vive de
+    // forma confiable en la BD de reportes.php, se filtra abajo en JS con
+    // los mismos datos que ya usa el calendario (todosLosViajes).
+    const p = new URLSearchParams();
+    const desde = document.getElementById('rp-desde').value;
+    const hasta = document.getElementById('rp-hasta').value;
+    const conductor = document.getElementById('rp-conductor').value;
+    const estadoPago = document.getElementById('rp-estado-pago').value;
+    if (desde) p.set('desde', desde);
+    if (hasta) p.set('hasta', hasta);
+    if (conductor) p.set('conductor', conductor);
+    if (estadoPago) p.set('estado_pago', estadoPago);
+    return p.toString();
+  }
+  // Mapa idEvento -> trayecto real, sacado del mismo array que ya pinta el
+  // calendario (todosLosViajes, viene de cargarDatosDesdeAPI en el script
+  // principal). Es la fuente confiable — reportes.php ya no intenta resolverlo.
+  function rpMapaTrayectos() {
+    const mapa = {};
+    (typeof todosLosViajes !== 'undefined' ? todosLosViajes : []).forEach(v => {
+      if (v.idEvento) mapa[v.idEvento] = v.trayecto || '';
+    });
+    return mapa;
+  }
+  window.rpCargarReporte = async function () {
+    rpMsg('Cargando...', '');
+    try {
+      const resp = await fetch(RP_BASE + '?accion=reporte_pagos&' + rpFiltrosQuery());
+      const data = await resp.json();
+      if (!data.ok) { rpMsg(data.error || 'Error al cargar el reporte', 'error'); return; }
+      // Cruzar cada fila con el trayecto real (mismos datos del calendario).
+      const mapaTrayectos = rpMapaTrayectos();
+      let filas = data.filas.map(f => ({ ...f, trayecto: mapaTrayectos[f.id_evento] || '' }));
+      // Filtro de trayecto (texto libre, sobre el trayecto ya resuelto).
+      const buscadoTrayecto = document.getElementById('rp-trayecto').value.trim().toLowerCase();
+      if (buscadoTrayecto) {
+        filas = filas.filter(f => (f.trayecto || '').toLowerCase().includes(buscadoTrayecto));
+      }
+      rpUltimasFilas = filas; // se reutiliza en rpExportarXlsx
+      const tbody = document.getElementById('rp-tbody');
+      tbody.innerHTML = '';
+      let totalGeneral = 0;
+      const totalesPorConductor = {};
+      const totalesPorGuia = {};
+      filas.forEach(f => {
+        // Total de la fila = pago base (tarifa/manual) + suplemento adicional.
+        const montoBase = f.monto_pago !== null ? Number(f.monto_pago) : 0;
+        const montoAdicional = f.monto_adicional !== null && f.monto_adicional !== undefined ? Number(f.monto_adicional) : 0;
+        const monto = montoBase + montoAdicional;
+        totalGeneral += monto;
+        const cond = f.conductor || '(sin conductor)';
+        if (!totalesPorConductor[cond]) totalesPorConductor[cond] = { conductor: cond, total: 0, viajes: 0 };
+        totalesPorConductor[cond].total += monto;
+        totalesPorConductor[cond].viajes += 1;
+
+        // Pago al guía/asistente: separado del pago al conductor, tanto acá
+        // (no se suma a "monto" de la fila) como en el total por conductor.
+        const tieneGuia = !!(f.guia_nombre && f.guia_nombre.trim() !== '');
+        const montoGuia = f.guia_monto !== null && f.guia_monto !== undefined ? Number(f.guia_monto) : null;
+        if (tieneGuia && montoGuia !== null) {
+          totalGeneral += montoGuia; // el total general sí incluye todo lo que sale (conductor + guía)
+          const guia = f.guia_nombre;
+          if (!totalesPorGuia[guia]) totalesPorGuia[guia] = { guia: guia, total: 0, viajes: 0 };
+          totalesPorGuia[guia].total += montoGuia;
+          totalesPorGuia[guia].viajes += 1;
+        }
+
+        const tr = document.createElement('tr');
+        const montoTxt = f.monto_pago !== null ? '$' + Number(f.monto_pago).toFixed(2) : '⚠ sin asignar';
+        const tarifaTxt = f.tarifa_descripcion ? f.tarifa_descripcion : (f.monto_pago !== null ? 'Manual' : '—');
+        const trayectoTxt = f.trayecto && f.trayecto.trim() !== '' ? f.trayecto : '—';
+        const adicionalTxt = montoAdicional > 0
+          ? '$' + montoAdicional.toFixed(2) + (f.concepto_adicional ? ' — ' + f.concepto_adicional : '')
+          : '—';
+        const guiaNombreTxt = tieneGuia ? f.guia_nombre : '—';
+        const guiaMontoTxt = !tieneGuia
+          ? '—'
+          : (montoGuia !== null ? '$' + montoGuia.toFixed(2) + (f.guia_estado_pago === 'pagado' ? ' ✅' : ' ⏳') : '⚠ sin asignar');
+        const guiaPagoClase = tieneGuia && montoGuia !== null ? (f.guia_estado_pago === 'pagado' ? 'rp-pagado' : 'rp-pendiente') : '';
+        tr.innerHTML = `
+          <td><input type="checkbox" class="rp-row-check" value="${f.id_evento}"></td>
+          <td>${f.fecha ?? ''}</td>
+          <td>${f.conductor ?? ''} <small>(${f.tipo_conductor ?? ''})</small></td>
+          <td>${f.tipo_conductor ?? ''}</td>
+          <td>${trayectoTxt}</td>
+          <td>${f.pasajero_principal ?? ''}</td>
+          <td>${f.cantidad_pasajeros ?? 0}</td>
+          <td>${tarifaTxt} — ${montoTxt}</td>
+          <td>${adicionalTxt}</td>
+          <td>${guiaNombreTxt}</td>
+          <td class="${guiaPagoClase}">${guiaMontoTxt}</td>
+          <td class="${f.estado_pago === 'pagado' ? 'rp-pagado' : 'rp-pendiente'}">${f.estado_pago ?? ''}</td>
+          <td><button onclick="rpAbrirModalAsignar('${f.id_evento}')">Asignar / Editar monto</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.getElementById('rp-total-general').textContent = '$' + totalGeneral.toFixed(2);
+      const tbodyTot = document.querySelector('#rp-tabla-totales-conductor tbody');
+      tbodyTot.innerHTML = '';
+      Object.values(totalesPorConductor).forEach(t => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${t.conductor}</td><td>${t.viajes}</td><td>$${t.total.toFixed(2)}</td>`;
+        tbodyTot.appendChild(tr);
+      });
+      const tbodyTotGuia = document.querySelector('#rp-tabla-totales-guia tbody');
+      tbodyTotGuia.innerHTML = '';
+      Object.values(totalesPorGuia).forEach(t => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${t.guia}</td><td>${t.viajes}</td><td>$${t.total.toFixed(2)}</td>`;
+        tbodyTotGuia.appendChild(tr);
+      });
+      rpMsg(filas.length + ' viajes encontrados.', 'ok');
+    } catch (e) {
+      rpMsg('Error de red: ' + e.message, 'error');
+    }
+  };
+  window.rpToggleAll = function (checkbox) {
+    document.querySelectorAll('.rp-row-check').forEach(c => c.checked = checkbox.checked);
+  };
+  window.rpMarcarSeleccionados = async function (accion) {
+    const ids = Array.from(document.querySelectorAll('.rp-row-check:checked')).map(c => c.value);
+    if (ids.length === 0) { rpMsg('Selecciona al menos un viaje.', 'error'); return; }
+    const body = new URLSearchParams();
+    body.set('accion', accion);
+    body.set('admin_api_key', rpGetAdminKey());
+    ids.forEach(id => body.append('ids[]', id));
+    const resp = await fetch(RP_BASE, { method: 'POST', body });
+    const data = await resp.json();
+    if (!data.ok) { rpMsg(data.error || 'Error', 'error'); return; }
+    rpMsg('Actualizado: ' + data.afectados + ' viaje(s).', 'ok');
+    rpCargarReporte();
+  };
+  window.rpExportarXlsx = async function () {
+    // Refresca primero para que el XLSX salga con los filtros actuales
+    // (incluido el de trayecto, que es 100% client-side).
+    await rpCargarReporte();
+    if (rpUltimasFilas.length === 0) { rpMsg('No hay filas para exportar con estos filtros.', 'error'); return; }
+    try {
+      const resp = await fetch(RP_BASE + '?accion=exportar_xlsx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filas: rpUltimasFilas })
+      });
+      if (!resp.ok) { rpMsg('No se pudo generar el XLSX', 'error'); return; }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'reporte_pagos_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      rpMsg('Error al exportar: ' + e.message, 'error');
+    }
+  };
+  // ---- Asignar tarifa / monto manual a un viaje puntual ----
+  // Reemplaza los viejos prompt()/confirm() encadenados (donde te perdías en
+  // el scroll de una lista numerada) por un modal con un <select> normal,
+  // agrupado por tipo/grupo, y el monto estimado visible en vivo.
+  let rpTarifasCache = [];
+  let rpModalIdEvento = null;
+  function rpEsTour(tarifa) {
+    // Un "tour" es un solo precio, nunca ida y vuelta — sin importar qué
+    // haya quedado cargado por error en precio_ida_vuelta.
+    return /tour/i.test(`${tarifa.grupo || ''} ${tarifa.descripcion || ''}`);
+  }
+  function rpConstruirOpcionesTarifas(tarifas) {
+    const grupos = {};
+    tarifas.forEach(t => {
+      const vehiculo = t.tipo_vehiculo === 'sedan_van' ? 'Sedán/Van' : (t.tipo_vehiculo === 'hiace_bus' ? 'Hiace/Bus' : '');
+      const clave = `${t.tipo_conductor === 'interno' ? 'Interno' : 'Externo'}${vehiculo ? ' · ' + vehiculo : ''} — ${t.grupo}`;
+      (grupos[clave] = grupos[clave] || []).push(t);
+    });
+    return Object.entries(grupos).map(([clave, lista]) => {
+      const opciones = lista.map(t => {
+        const precio = t.precio_una_via !== null
+          ? '$' + Number(t.precio_una_via).toFixed(2)
+          : (t.precio_ida_vuelta !== null ? '$' + Number(t.precio_ida_vuelta).toFixed(2) : 'sin precio');
+        return `<option value="${t.id}">${t.descripcion} — ${precio}${rpEsTour(t) ? '' : (t.precio_ida_vuelta !== null && t.precio_una_via !== null ? ' (o ida/vuelta)' : '')}</option>`;
+      }).join('');
+      return `<optgroup label="${clave}">${opciones}</optgroup>`;
+    }).join('');
+  }
+  window.rpAbrirModalAsignar = async function (idEvento) {
+    if (rpTarifasCache.length === 0) {
+      const resp = await fetch(RP_BASE + '?accion=listar_tarifas');
+      const data = await resp.json();
+      if (data.ok) rpTarifasCache = data.tarifas;
+    }
+    rpModalIdEvento = idEvento;
+    const fila = rpUltimasFilas.find(f => String(f.id_evento) === String(idEvento));
+    const overlay = document.getElementById('rp-modalOverlay');
+    const contenido = document.getElementById('rp-modalContenido');
+    // Valores actuales del suplemento (si ya tenía uno cargado), para
+    // prellenar el formulario al reabrir el modal de este viaje.
+    const montoAdicionalActual = fila && fila.monto_adicional !== null && fila.monto_adicional !== undefined ? Number(fila.monto_adicional) : '';
+    const conceptoAdicionalActual = fila && fila.concepto_adicional ? fila.concepto_adicional : '';
+    // Guía/Asistencia: el nombre se carga en "Editar viaje" (Calendario/Lista),
+    // acá solo se le asigna el monto — totalmente aparte de la tarifa/monto
+    // del conductor de arriba.
+    const guiaNombreActual = fila && fila.guia_nombre ? fila.guia_nombre : '';
+    const guiaMontoActual = fila && fila.guia_monto !== null && fila.guia_monto !== undefined ? Number(fila.guia_monto) : '';
+    const guiaPagadoActual = fila && fila.guia_estado_pago === 'pagado';
+    contenido.innerHTML = `
+      <div class="flex justify-between items-start mb-3">
+        <div>
+          <h3 style="margin:0;font-size:18px;font-weight:700;">Asignar pago</h3>
+          <p style="margin:2px 0 0;font-size:13px;color:#666;">${fila ? `${fila.fecha || ''} · ${fila.conductor || ''} · ${fila.trayecto || 'TOUR'}` : ''}</p>
+        </div>
+        <button onclick="rpCerrarModalAsignar()" style="border:none;background:none;font-size:22px;cursor:pointer;line-height:1;">&times;</button>
+      </div>
+      <div class="rp-field" style="margin-bottom:10px;">
+        <label>Tarifa</label>
+        <select id="rp-modal-tarifa" style="width:100%;" onchange="rpActualizarFormAsignar()">
+          <option value="">— Seleccionar tarifa —</option>
+          ${rpConstruirOpcionesTarifas(rpTarifasCache)}
+        </select>
+      </div>
+      <div id="rp-modal-campos-extra"></div>
+      <div style="margin:10px 0;padding:10px;background:#f7f5ff;border-radius:8px;font-weight:600;">
+        Monto estimado: <span id="rp-modal-monto-estimado">$0.00</span>
+      </div>
+      <button class="rp-primary" onclick="rpConfirmarAsignarTarifa()" style="width:100%;margin-bottom:16px;">Asignar esta tarifa</button>
+      <hr>
+      <div class="rp-field" style="margin:12px 0 8px;">
+        <label>O ingresar monto manual (USD)</label>
+        <input type="number" step="0.01" id="rp-modal-monto-manual" style="width:100%;" placeholder="Ej: 45.00">
+      </div>
+      <button onclick="rpConfirmarMontoManual()" style="width:100%;">Asignar monto manual</button>
+      <hr style="margin:16px 0;">
+      <div class="rp-field" style="margin:12px 0 8px;">
+        <label>Suplemento adicional (idioma, pax adicional, trayecto adicional, horario)</label>
+        <div style="display:flex;gap:8px;">
+          <select id="rp-modal-concepto-adicional" style="flex:1;">
+            <option value="">Sin suplemento</option>
+            <option value="Idioma" ${conceptoAdicionalActual === 'Idioma' ? 'selected' : ''}>Idioma</option>
+            <option value="Pax adicional" ${conceptoAdicionalActual === 'Pax adicional' ? 'selected' : ''}>Pax adicional</option>
+            <option value="Trayecto adicional" ${conceptoAdicionalActual === 'Trayecto adicional' ? 'selected' : ''}>Trayecto adicional</option>
+            <option value="Horario" ${conceptoAdicionalActual === 'Horario' ? 'selected' : ''}>Suplemento por horario</option>
+            <option value="Otro" ${conceptoAdicionalActual === 'Otro' ? 'selected' : ''}>Otro</option>
+          </select>
+          <input type="number" step="0.01" id="rp-modal-monto-adicional" style="width:110px;" placeholder="Monto" value="${montoAdicionalActual}">
+        </div>
+        <p style="font-size:11px;color:#888;margin:4px 0 0;">Se suma aparte al monto de arriba. Dejar el monto vacío o en 0 lo quita.</p>
+      </div>
+      <button onclick="rpGuardarAdicional()" style="width:100%;">Guardar suplemento</button>
+      <hr style="margin:16px 0;">
+      <div class="rp-field" style="margin:12px 0 8px;">
+        <label>Guía / Asistencia</label>
+        ${guiaNombreActual ? `
+          <p style="font-size:13px;margin:4px 0;">👤 <strong>${guiaNombreActual}</strong> ${guiaPagadoActual ? '<span class="rp-pagado">✅ pagado</span>' : '<span class="rp-pendiente">⏳ pendiente</span>'}</p>
+          <div style="display:flex;gap:8px;">
+            <input type="number" step="0.01" id="rp-modal-monto-guia" style="flex:1;" placeholder="Monto guía" value="${guiaMontoActual}">
+            <button onclick="rpConfirmarGuiaMonto()">Asignar</button>
+          </div>
+          <p style="font-size:11px;color:#888;margin:4px 0 0;">Dejar el monto vacío o en 0 lo quita. Es un pago aparte del conductor — se marca pagado/pendiente por separado.</p>
+        ` : `
+          <p style="font-size:12px;color:#888;margin:4px 0 0;">Este viaje no tiene guía/asistencia asignado. El nombre se carga desde "Editar viaje" (Calendario/Lista).</p>
+        `}
+      </div>
+    `;
+    overlay.style.display = 'flex';
+    rpActualizarFormAsignar();
+  };
+  window.rpActualizarFormAsignar = function () {
+    const id = document.getElementById('rp-modal-tarifa').value;
+    const cont = document.getElementById('rp-modal-campos-extra');
+    const tarifa = rpTarifasCache.find(t => String(t.id) === String(id));
+    if (!tarifa) { cont.innerHTML = ''; rpRecalcularMontoEstimado(); return; }
+    const mostrarIdaVuelta = !rpEsTour(tarifa) && tarifa.precio_una_via !== null && tarifa.precio_ida_vuelta !== null;
+    let html = '';
+    if (mostrarIdaVuelta) {
+      html += `
+        <div class="rp-field" style="margin-bottom:10px;">
+          <label>Tipo de viaje</label>
+          <select id="rp-modal-tipo-viaje" onchange="rpRecalcularMontoEstimado()">
+            <option value="una_via">Una vía — $${Number(tarifa.precio_una_via).toFixed(2)}</option>
+            <option value="ida_vuelta">Ida y vuelta — $${Number(tarifa.precio_ida_vuelta).toFixed(2)}</option>
+          </select>
+        </div>
+      `;
+    }
+    if (tarifa.precio_adicional !== null) {
+      html += `
+        <div class="rp-field" style="margin-bottom:10px;">
+          <label>Pasajeros adicionales (extra sobre el base)</label>
+          <input type="number" min="0" id="rp-modal-pax-adicionales" value="0" style="width:100%;" oninput="rpRecalcularMontoEstimado()">
+        </div>
+      `;
+    }
+    cont.innerHTML = html;
+    rpRecalcularMontoEstimado();
+  };
+  window.rpRecalcularMontoEstimado = function () {
+    const span = document.getElementById('rp-modal-monto-estimado');
+    const id = document.getElementById('rp-modal-tarifa').value;
+    const tarifa = rpTarifasCache.find(t => String(t.id) === String(id));
+    if (!tarifa) { span.textContent = '$0.00'; return; }
+    const selTipoViaje = document.getElementById('rp-modal-tipo-viaje');
+    const tipoViaje = selTipoViaje ? selTipoViaje.value : (tarifa.precio_una_via !== null ? 'una_via' : 'ida_vuelta');
+    const base = tipoViaje === 'ida_vuelta' ? tarifa.precio_ida_vuelta : tarifa.precio_una_via;
+    const paxInput = document.getElementById('rp-modal-pax-adicionales');
+    const pax = paxInput ? (parseInt(paxInput.value, 10) || 0) : 0;
+    const adicional = tarifa.precio_adicional !== null ? Number(tarifa.precio_adicional) * pax : 0;
+    span.textContent = '$' + ((Number(base) || 0) + adicional).toFixed(2);
+  };
+  window.rpConfirmarAsignarTarifa = async function () {
+    const idTarifa = document.getElementById('rp-modal-tarifa').value;
+    if (!idTarifa) { rpMsg('Selecciona una tarifa primero.', 'error'); return; }
+    const tarifa = rpTarifasCache.find(t => String(t.id) === String(idTarifa));
+    const selTipoViaje = document.getElementById('rp-modal-tipo-viaje');
+    const tipoViaje = selTipoViaje ? selTipoViaje.value : (tarifa.precio_una_via !== null ? 'una_via' : 'ida_vuelta');
+    const paxInput = document.getElementById('rp-modal-pax-adicionales');
+    const paxAdicionales = paxInput ? (parseInt(paxInput.value, 10) || 0) : 0;
+    const body = new URLSearchParams();
+    body.set('accion', 'asignar_tarifa');
+    body.set('admin_api_key', rpGetAdminKey());
+    body.set('id_evento', rpModalIdEvento);
+    body.set('id_tarifa', idTarifa);
+    body.set('tipo_viaje_pago', tipoViaje);
+    body.set('pax_adicionales', String(paxAdicionales));
+    const resp = await fetch(RP_BASE, { method: 'POST', body });
+    const data = await resp.json();
+    if (!data.ok) { rpMsg(data.error, 'error'); return; }
+    rpMsg('Tarifa asignada. Monto: $' + data.monto_pago.toFixed(2), 'ok');
+    rpCerrarModalAsignar();
+    rpCargarReporte();
+  };
+  window.rpConfirmarMontoManual = async function () {
+    const monto = document.getElementById('rp-modal-monto-manual').value;
+    if (!monto) { rpMsg('Escribe un monto.', 'error'); return; }
+    const body = new URLSearchParams();
+    body.set('accion', 'monto_manual');
+    body.set('admin_api_key', rpGetAdminKey());
+    body.set('id_evento', rpModalIdEvento);
+    body.set('monto', monto);
+    const resp = await fetch(RP_BASE, { method: 'POST', body });
+    const data = await resp.json();
+    if (!data.ok) { rpMsg(data.error, 'error'); return; }
+    rpMsg('Monto manual asignado: $' + data.monto_pago.toFixed(2), 'ok');
+    rpCerrarModalAsignar();
+    rpCargarReporte();
+  };
+  window.rpGuardarAdicional = async function () {
+    const monto = document.getElementById('rp-modal-monto-adicional').value;
+    const concepto = document.getElementById('rp-modal-concepto-adicional').value;
+    const body = new URLSearchParams();
+    body.set('accion', 'guardar_adicional');
+    body.set('admin_api_key', rpGetAdminKey());
+    body.set('id_evento', rpModalIdEvento);
+    body.set('monto_adicional', monto || '0');
+    body.set('concepto_adicional', concepto);
+    const resp = await fetch(RP_BASE, { method: 'POST', body });
+    const data = await resp.json();
+    if (!data.ok) { rpMsg(data.error, 'error'); return; }
+    rpMsg(data.monto_adicional ? ('Suplemento guardado: $' + Number(data.monto_adicional).toFixed(2)) : 'Suplemento quitado.', 'ok');
+    rpCerrarModalAsignar();
+    rpCargarReporte();
+  };
+  window.rpConfirmarGuiaMonto = async function () {
+    const monto = document.getElementById('rp-modal-monto-guia').value;
+    const body = new URLSearchParams();
+    body.set('accion', 'guia_monto_manual');
+    body.set('admin_api_key', rpGetAdminKey());
+    body.set('id_evento', rpModalIdEvento);
+    body.set('monto', monto || '0');
+    const resp = await fetch(RP_BASE, { method: 'POST', body });
+    const data = await resp.json();
+    if (!data.ok) { rpMsg(data.error, 'error'); return; }
+    rpMsg(data.guia_monto ? ('Monto de guía asignado: $' + Number(data.guia_monto).toFixed(2)) : 'Monto de guía quitado.', 'ok');
+    rpCerrarModalAsignar();
+    rpCargarReporte();
+  };
+  window.rpCerrarModalAsignar = function () {
+    document.getElementById('rp-modalOverlay').style.display = 'none';
+    rpModalIdEvento = null;
+  };
+  window.rpCerrarModalAsignarSiOverlay = function (e) {
+    if (e.target.id === 'rp-modalOverlay') rpCerrarModalAsignar();
+  };
+  // ---- Gestión de tarifas ----
+  window.rpCargarTarifas = async function () {
+    const tipo = document.getElementById('rp-tarifa-filtro-tipo').value;
+    const resp = await fetch(RP_BASE + '?accion=listar_tarifas' + (tipo ? '&tipo_conductor=' + tipo : ''));
+    const data = await resp.json();
+    if (!data.ok) { rpMsg(data.error, 'error'); return; }
+    rpTarifasCache = data.tarifas;
+    const cont = document.getElementById('rp-tarifas-lista');
+    cont.innerHTML = '';
+    let grupoActual = '';
+    data.tarifas.forEach(t => {
+      if (t.grupo !== grupoActual) {
+        grupoActual = t.grupo;
+        const h = document.createElement('div');
+        h.style.fontWeight = 'bold';
+        h.style.marginTop = '6px';
+        h.textContent = `${t.tipo_conductor}${t.tipo_vehiculo ? ' / ' + t.tipo_vehiculo : ''} — ${grupoActual}`;
+        cont.appendChild(h);
+      }
+      const div = document.createElement('div');
+      div.className = 'rp-tarifa-item';
+      div.innerHTML = `
+        <span style="flex:1">${t.descripcion}</span>
+        <span>Una vía: ${t.precio_una_via !== null ? '$' + Number(t.precio_una_via).toFixed(2) : '—'}</span>
+        <span>Ida/vuelta: ${t.precio_ida_vuelta !== null ? '$' + Number(t.precio_ida_vuelta).toFixed(2) : '—'}</span>
+        <span>Adicional: ${t.precio_adicional !== null ? '$' + Number(t.precio_adicional).toFixed(2) : '—'}</span>
+        <button onclick="rpEditarTarifa(${t.id})">Editar</button>
+        <button onclick="rpEliminarTarifa(${t.id})">Eliminar</button>
+      `;
+      cont.appendChild(div);
+    });
+  };
+  window.rpMostrarFormTarifa = function () {
+    document.getElementById('rp-tf-id').value = '';
+    document.getElementById('rp-tf-tipo-conductor').value = 'interno';
+    document.getElementById('rp-tf-tipo-vehiculo').value = '';
+    document.getElementById('rp-tf-grupo').value = '';
+    document.getElementById('rp-tf-descripcion').value = '';
+    document.getElementById('rp-tf-una-via').value = '';
+    document.getElementById('rp-tf-ida-vuelta').value = '';
+    document.getElementById('rp-tf-adicional').value = '';
+    document.getElementById('rp-form-tarifa').style.display = 'block';
+  };
+  window.rpEditarTarifa = function (id) {
+    const t = rpTarifasCache.find(x => x.id == id);
+    if (!t) return;
+    document.getElementById('rp-tf-id').value = t.id;
+    document.getElementById('rp-tf-tipo-conductor').value = t.tipo_conductor;
+    document.getElementById('rp-tf-tipo-vehiculo').value = t.tipo_vehiculo || '';
+    document.getElementById('rp-tf-grupo').value = t.grupo;
+    document.getElementById('rp-tf-descripcion').value = t.descripcion;
+    document.getElementById('rp-tf-una-via').value = t.precio_una_via ?? '';
+    document.getElementById('rp-tf-ida-vuelta').value = t.precio_ida_vuelta ?? '';
+    document.getElementById('rp-tf-adicional').value = t.precio_adicional ?? '';
+    document.getElementById('rp-form-tarifa').style.display = 'block';
+  };
+  window.rpGuardarTarifa = async function () {
+    const body = new URLSearchParams();
+    body.set('accion', 'guardar_tarifa');
+    body.set('admin_api_key', rpGetAdminKey());
+    const id = document.getElementById('rp-tf-id').value;
+    if (id) body.set('id', id);
+    body.set('tipo_conductor', document.getElementById('rp-tf-tipo-conductor').value);
+    body.set('tipo_vehiculo', document.getElementById('rp-tf-tipo-vehiculo').value);
+    body.set('grupo', document.getElementById('rp-tf-grupo').value);
+    body.set('descripcion', document.getElementById('rp-tf-descripcion').value);
+    body.set('precio_una_via', document.getElementById('rp-tf-una-via').value);
+    body.set('precio_ida_vuelta', document.getElementById('rp-tf-ida-vuelta').value);
+    body.set('precio_adicional', document.getElementById('rp-tf-adicional').value);
+    const resp = await fetch(RP_BASE, { method: 'POST', body });
+    const data = await resp.json();
+    if (!data.ok) { rpMsg(data.error, 'error'); return; }
+    document.getElementById('rp-form-tarifa').style.display = 'none';
+    rpMsg('Tarifa guardada.', 'ok');
+    rpCargarTarifas();
+  };
+  window.rpEliminarTarifa = async function (id) {
+    if (!confirm('¿Eliminar esta tarifa?')) return;
+    const body = new URLSearchParams();
+    body.set('accion', 'eliminar_tarifa');
+    body.set('admin_api_key', rpGetAdminKey());
+    body.set('id', id);
+    const resp = await fetch(RP_BASE, { method: 'POST', body });
+    const data = await resp.json();
+    if (!data.ok) { rpMsg(data.error, 'error'); return; }
+    rpMsg('Tarifa eliminada.', 'ok');
+    rpCargarTarifas();
+  };
+  // Nota: la carga inicial de tarifas/reporte NO se dispara aquí
+  // — se dispara desde cambiarVista('reportes') la primera vez que el admin
+  // abre esa pestaña, para no golpear reportes.php en cada carga de página.
+})();
+// FIX 2026-09-11 (Enrique) — buscador por pasajero/N° de reserva: filtra en
+// vivo mientras se escribe (debounced, para no repintar el calendario en
+// cada tecla), y con Enter dispara aplicarFiltros(true) para que además
+// "localice" saltando el calendario al resultado más cercano (misma lógica
+// que ya usaba el botón "Aplicar" con Fecha desde). Ver aplicarFiltros().
+(function inicializarBuscador() {
+  const elBusqueda = document.getElementById("filtroBusqueda");
+  if (!elBusqueda) return;
+  let debounceBusqueda = null;
+  elBusqueda.addEventListener("input", function () {
+    clearTimeout(debounceBusqueda);
+    debounceBusqueda = setTimeout(() => aplicarFiltros(), 250);
+  });
+  elBusqueda.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      clearTimeout(debounceBusqueda);
+      aplicarFiltros(true);
+    }
+  });
+})();
+cargarDatosDesdeAPI(true);
+setInterval(() => cargarDatosDesdeAPI(false), INTERVALO_AUTOACTUALIZAR_MS);
+</script>
+</body>
+</html>

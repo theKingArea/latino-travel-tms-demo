@@ -1,0 +1,10 @@
+# Secretos reales — nunca se suben
+config.php
+mailer.php
+push.php
+log_actividad.txt
+*.log
+
+# Sistema
+.DS_Store
+Thumbs.db
