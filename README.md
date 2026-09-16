@@ -43,4 +43,4 @@ OTAs (correo) ─────────┼──▶ recibir-ota.php ───�
 **2. Traslados de ida y vuelta con el tramo de salida invertido.** El trayecto de un traslado se calculaba una sola vez y se reutilizaba igual en todos sus tramos, así que el tramo de "salida" (hotel → aeropuerto) quedaba guardado en la dirección de "llegada" (aeropuerto → hotel). Solución: función que invierte el trayecto solo cuando tiene la forma exacta "ORIGEN A DESTINO", aplicada tanto a traslados marcados "ida y vuelta" como a solicitudes de solo salida (que no traían ese campo marcado pero son igual de direccionales).
 
 ---
-Enrique — [tu contacto aquí]
+Enrique — enriquearaujo@publimenu.com
